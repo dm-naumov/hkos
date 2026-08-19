@@ -52,6 +52,10 @@ class LatencyTracker:
         history = self._history.get(operation)
         if not history:
             return None
+        if len(history) < 2:
+            # Один замер: любой перцентиль = это значение
+            # (statistics.quantiles требует >=2 точек).
+            return float(history[0])
         quantiles = statistics.quantiles(
             sorted(history), n=100, method="inclusive")
         # quantiles содержит n-1=99 точек (индексы 0..98)

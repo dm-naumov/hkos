@@ -77,6 +77,9 @@ hkos-mcp = "hkos.mcp_server.server:main"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = [".."]
+markers = [
+    "sla: wall-clock SLA thresholds (retrieval/context/snapshot latency); environment-sensitive - excluded from CI default jobs, run in the informational perf job and locally",
+]
 
 [tool.mypy]
 python_version = "3.12"

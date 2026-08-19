@@ -10,6 +10,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
 from hkos.core.logger import HKOSLogger
 from hkos.performance.integration import PerformanceIntegration
 from hkos.repository.models import Knowledge
@@ -24,6 +26,7 @@ REPORT = Path(os.environ.get(
     os.path.join(tempfile.gettempdir(), "hkos-release-metrics.md")))
 
 
+@pytest.mark.sla
 class TestFinalReleaseMetrics:
     """Метрики релиза: таблица SLA + сводка (пишется в отчёт)."""
 

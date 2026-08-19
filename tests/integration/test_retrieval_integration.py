@@ -8,6 +8,8 @@ Relationship Expansion, Archived Knowledge, Canonical Priority.
 import time
 from pathlib import Path
 
+import pytest
+
 from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
@@ -171,6 +173,7 @@ class TestRetrievalIntegration:
         first = result.items[0]
         assert first.entity.id == canonical.id or first.explanation.canonical
 
+    @pytest.mark.sla
     def test_performance_10k(self, tmp_path: Path) -> None:
         """Производительность: 10K Knowledge, retrieval < 100 ms."""
         engine, repos, lib, index, rv = self._ctx(tmp_path)

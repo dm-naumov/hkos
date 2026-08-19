@@ -7,6 +7,8 @@ Save, Cache hit ratio.
 import time
 from pathlib import Path
 
+import pytest
+
 from hkos.context import ContextBuilder, SnapshotLoader
 from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
@@ -17,6 +19,7 @@ from tests.system.ds015.fixtures import create_ds015_context
 from tests.system.fixtures import _MemoryPersistence
 
 
+@pytest.mark.sla
 class TestPerformanceRegression:
     """SLA-таблица DS-013 на production-контексте."""
 

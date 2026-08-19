@@ -1,6 +1,7 @@
 """Unit tests: VersionManifest (DS-013 ЭТАП 2)."""
 
 from __future__ import annotations
+
 import json
 from pathlib import Path
 
