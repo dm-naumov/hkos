@@ -44,12 +44,13 @@ dev = [
     "pytest-rerunfailures>=14.0",
     "mypy>=1.0",
     "ruff>=0.1",
+    "mcp>=1.0",  # official MCP SDK — interop tests only
 ]
 
 [project.urls]
-Homepage = "https://github.com/dnaumov/hkos"
-Documentation = "https://github.com/dnaumov/hkos#readme"
-Source = "https://github.com/dnaumov/hkos"
+Homepage = "https://github.com/dm-naumov/hkos"
+Documentation = "https://github.com/dm-naumov/hkos#readme"
+Source = "https://github.com/dm-naumov/hkos"
 
 [tool.setuptools]
 # The repository root IS the hkos package (root __init__.py), so the package
@@ -63,8 +64,11 @@ packages = [
     "hkos.kernel", "hkos.knowledge", "hkos.librarian", "hkos.migration",
     "hkos.performance", "hkos.project", "hkos.repository", "hkos.retrieval",
     "hkos.services", "hkos.services.librarian", "hkos.snapshot", "hkos.storage",
-    "hkos.utils",
+    "hkos.utils", "hkos.mcp_server",
 ]
+
+[project.scripts]
+hkos-mcp = "hkos.mcp_server.server:main"
 
 [tool.setuptools.package-data]
 "hkos.config" = ["*.yaml"]

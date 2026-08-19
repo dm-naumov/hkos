@@ -34,11 +34,14 @@ class ConfigLoader:
         """Load configuration from the appropriate YAML file."""
         config_file = CONFIG_FILE_DEV if self._profile == "development" else CONFIG_FILE_PROD
 
-        # Try absolute path first, then relative
+        # Try absolute path first, then relative to cwd, then relative to the
+        # installed package (config ships as package data) — so a pip-installed
+        # HKOS works from any working directory.
+        package_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         paths_to_try = [
             config_file,
             os.path.join(os.getcwd(), config_file),
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", config_file),
+            os.path.join(package_root, config_file),
         ]
 
         loaded = False

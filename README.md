@@ -1,6 +1,6 @@
 # HKOS — Hermes Knowledge OS
 
-[![CI](https://github.com/dnaumov/hkos/actions/workflows/ci.yml/badge.svg)](https://github.com/dnaumov/hkos/actions/workflows/ci.yml)
+[![CI](https://github.com/dm-naumov/hkos/actions/workflows/ci.yml/badge.svg)](https://github.com/dm-naumov/hkos/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-990%2B-brightgreen.svg)]()
@@ -223,6 +223,25 @@ Measured on a stock Linux workstation, corpus generated deterministically
 **In one sentence:** most agent-memory tools make memory *another model's
 output*; HKOS makes memory *your engineering data* — deterministic, versioned,
 auditable, and portable across LLMs.
+
+## MCP
+
+HKOS ships an MCP server (`hkos-mcp`, stdio, zero dependencies): any MCP
+client — Claude Desktop, IDEs, agent frameworks — can `retrieve`, `context`,
+`save`, `snapshot`, `doctor` and `status` against an HKOS knowledge base.
+
+```bash
+pip install hkos
+hkos-mcp --root ./hkos        # data root (HKOS_DATA_ROOT / HKOS_PROFILE env)
+```
+
+```json
+// claude_desktop_config.json
+{ "mcpServers": { "hkos": { "command": "hkos-mcp",
+                            "args": ["--root", "/abs/path/data-root"] } } }
+```
+
+See [docs/mcp.md](docs/mcp.md) for the tool reference and client setup.
 
 ## Documentation
 
