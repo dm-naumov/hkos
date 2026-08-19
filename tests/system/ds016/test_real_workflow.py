@@ -45,7 +45,7 @@ class TestRealWorkflow:
             title="Config Version", body="OpenWRT 25.12.5",
             tags=["openwrt", "udp"], category="CONFIGURATION"))
         ctx.save_after_task(project.id, Knowledge(
-            title="Config Topology", body="lan=192.168.1.0/24, tun=tun0",
+            title="Config Topology", body="lan=10.10.0.0/24, tun=tun0",
             tags=["topology", "udp"], category="CONFIGURATION"))
         # FAILURE
         ctx.save_after_task(project.id, Knowledge(

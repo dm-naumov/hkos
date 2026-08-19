@@ -8,7 +8,8 @@ from pathlib import Path
 
 import yaml
 
-DOCS = Path("/home/dm/hkos/docs")
+DOCS = Path(__file__).resolve().parents[3] / "docs"
+CONFIG_PROD = Path(__file__).resolve().parents[3] / "config" / "hkos-production.yaml"
 REQUIRED = [
     "architecture.md", "installation.md", "administrator.md",
     "developer.md", "api-reference.md", "migration-guide.md",
@@ -39,8 +40,7 @@ class TestDocumentationSignoff:
 
     def test_versions_match(self) -> None:
         """Версии конфига и release совпадают."""
-        config = yaml.safe_load(
-            Path("/home/dm/hkos/config/hkos-production.yaml").read_text())
+        config = yaml.safe_load(CONFIG_PROD.read_text())
         assert config["hkos"]["version"] == "1.0.0"
 
     def test_production_config_described(self) -> None:

@@ -6,6 +6,7 @@
 
 import inspect
 import os
+from pathlib import Path
 
 from hkos.index import IndexEngine, IndexQueryExecutor
 from hkos.integration.hermes.migration_commands import MigrationCommandRegistry
@@ -63,7 +64,7 @@ class TestApiContracts:
 
     def test_no_nonexistent_api_in_docs(self) -> None:
         """Запрещённые/несуществующие API не упоминаются в документации."""
-        docs_dir = "/home/dm/hkos/docs"
+        docs_dir = str(Path(__file__).resolve().parents[3] / "docs")
         forbidden = [
             "event bus", "event sourcing", "Graph Search", "Memory DB",
             "vector database", "SQLite backend",

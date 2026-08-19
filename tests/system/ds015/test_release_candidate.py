@@ -13,13 +13,15 @@ from hkos.performance.performance_manager import PerformanceManager
 from hkos.repository.models import Knowledge
 from tests.system.ds015.fixtures import create_ds015_context
 
+_REPO = Path(__file__).resolve().parents[3]
+CONFIG_PROD = _REPO / "config" / "hkos-production.yaml"
+
 
 class TestReleaseCandidate:
     """Готовность релиза 1.0."""
 
     def test_version_and_config(self) -> None:
-        config = yaml.safe_load(
-            Path("/home/dm/hkos/config/hkos-production.yaml").read_text())
+        config = yaml.safe_load(CONFIG_PROD.read_text())
         version = config["hkos"]["version"]
         assert version.startswith("1.0"), f"version {version}"
         assert config["hkos"]["enabled"] is True
@@ -40,7 +42,7 @@ class TestReleaseCandidate:
         assert VersionManifest is not None
 
     def test_documentation_synced(self) -> None:
-        docs = Path("/home/dm/hkos/docs")
+        docs = _REPO / "docs"
         required = [
             "architecture.md", "installation.md", "administrator.md",
             "developer.md", "api-reference.md", "migration-guide.md",
@@ -74,8 +76,7 @@ class TestReleaseCandidate:
         log_file = tmp_path / "logs" / "performance.log"
         assert log_file.exists()
         assert "PROFILING_STARTED" in log_file.read_text()
-        config = yaml.safe_load(
-            Path("/home/dm/hkos/config/hkos-production.yaml").read_text())
+        config = yaml.safe_load(CONFIG_PROD.read_text())
         assert config["logging"]["max_size_mb"] > 0
         assert config["logging"]["backup_count"] > 0
 

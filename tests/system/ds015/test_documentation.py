@@ -8,7 +8,7 @@ import os
 import re
 from pathlib import Path
 
-DOCS_DIR = Path("/home/dm/hkos/docs")
+DOCS_DIR = Path(__file__).resolve().parents[3] / "docs"
 
 REQUIRED_DOCS = [
     "architecture.md", "installation.md", "administrator.md",

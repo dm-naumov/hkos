@@ -13,9 +13,12 @@ from pathlib import Path
 from hkos.repository.models import Knowledge
 from tests.system.ds016.hermes_context import create_hermes_context
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_PKG_PARENT = str(_REPO_ROOT.parent)
+
 _KILL_SCRIPT = "\n".join([
     "import sys",
-    "sys.path.insert(0, '/home/dm'); sys.path.insert(0, '/home/dm/hkos')",
+    f"sys.path.insert(0, {_PKG_PARENT!r})",
     "from pathlib import Path",
     "from tests.system.ds016.hermes_context import create_hermes_context",
     "from hkos.repository.models import Knowledge",
@@ -78,7 +81,7 @@ class TestHermesRecovery:
 
     def test_c_unexpected_shutdown(self, tmp_path: Path) -> None:
         subprocess.run([sys.executable, "-c", _KILL_SCRIPT, str(tmp_path)],
-                       cwd="/home/dm/hkos", check=False)
+                       cwd=str(_REPO_ROOT), check=False)
         # RESTART
         ctx = create_hermes_context(tmp_path)
         project = next(p for p in ctx.project.list() if p.name == "KillHermes")

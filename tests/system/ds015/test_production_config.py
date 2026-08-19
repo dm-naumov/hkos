@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-CONFIG_PATH = Path("/home/dm/hkos/config/hkos-production.yaml")
+CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "hkos-production.yaml"
 
 REQUIRED = {
     "hkos.enabled": bool,

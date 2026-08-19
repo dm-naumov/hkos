@@ -6,6 +6,7 @@ confirmation -> ALLOW; Audit RECEIVED/ALLOWED/DENIED. Hermes не может:
 """
 
 import os
+from pathlib import Path
 
 from hkos.integration.hermes.audit import (
     AUDIT_COMMAND_ALLOWED,
@@ -79,7 +80,7 @@ class TestSecurityQualification:
 
     def test_no_direct_repository_access(self) -> None:
         """Hermes-слой не пишет JSON/Repository/Index напрямую (статически)."""
-        integration_dir = "/home/dm/hkos/integration"
+        integration_dir = str(Path(__file__).resolve().parents[3] / "integration")
         for root, _dirs, files in os.walk(integration_dir):
             for name in files:
                 if not name.endswith(".py"):

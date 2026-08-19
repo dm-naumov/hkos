@@ -5,6 +5,8 @@
 """
 
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -15,7 +17,11 @@ from hkos.snapshot import SnapshotEngine
 from tests.system.ds015.fixtures import create_ds015_context
 from tests.system.fixtures import _MemoryPersistence
 
-REPORT = Path("/home/dm/Документы/память/Reports/review/DS-015-stage4-performance.md")
+# Report sink: override with HKOS_REPORT_DIR (e.g. the dev machine's review
+# dir); default to a temp file so the test is portable.
+REPORT = Path(os.environ.get(
+    "HKOS_REPORT_DIR",
+    os.path.join(tempfile.gettempdir(), "hkos-release-metrics.md")))
 
 
 class TestFinalReleaseMetrics:

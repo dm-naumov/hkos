@@ -33,7 +33,7 @@ class TestMultiAgentProduction:
             "openwrt", project_id=project.id, campaign_id=executor_c.id)
         assert len(planner_memory["retrieval_items"]) >= 1
         ctx.save_after_task(project.id, Knowledge(
-            title="Executor Config", body="lan=192.168.1.0/24",
+            title="Executor Config", body="lan=10.10.0.0/24",
             tags=["openwrt", "udp"], category="CONFIGURATION"))
         ctx.index.update(project.id,
                          planner_memory["retrieval_items"][0].entity.id,

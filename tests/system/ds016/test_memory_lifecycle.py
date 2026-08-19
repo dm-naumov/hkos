@@ -25,7 +25,7 @@ class TestMemoryLifecycle:
             title="Decision Route", body="использовать policy routing",
             tags=["openwrt", "routing", "udp"], category="DECISION"))
         ctx.save_after_task(project.id, Knowledge(
-            title="Config Net", body="lan=192.168.1.0/24, tun=tun0",
+            title="Config Net", body="lan=10.10.0.0/24, tun=tun0",
             tags=["openwrt", "config", "udp"], category="CONFIGURATION"))
         ctx.save_after_task(project.id, Knowledge(
             title="Failure Rule", body="cause: неправильный routing rule\n"

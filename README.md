@@ -1,5 +1,12 @@
 # HKOS — Hermes Knowledge OS
 
+[![CI](https://github.com/dnaumov/hkos/actions/workflows/ci.yml/badge.svg)](https://github.com/dnaumov/hkos/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-990%2B-brightgreen.svg)]()
+[![mypy](https://img.shields.io/badge/mypy-strict-2ea44f.svg)]()
+[![ruff](https://img.shields.io/badge/ruff-0%20functional%20findings-2ea44f.svg)]()
+
 **A deterministic, file-based engineering knowledge base for LLM agents.**
 
 HKOS is a long-lived, object-oriented knowledge database designed to store and

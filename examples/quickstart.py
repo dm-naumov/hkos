@@ -36,22 +36,23 @@ class MemoryPersistence:
     """Minimal in-memory SnapshotPersistence port (demo only)."""
 
     def __init__(self) -> None:
-        self._latest: dict[str, object] = {}
-        self._history: dict[str, list[object]] = {}
+        self._latest: dict[str, dict[str, object]] = {}
+        self._history: dict[str, list[dict[str, object]]] = {}
 
-    def latest(self, project: str) -> object | None:
+    def latest(self, project: str) -> dict[str, object] | None:
         return self._latest.get(project)
 
-    def version(self, project: str, version: int) -> object | None:
-        return None  # not used in this demo
+    def version(self, project: str, version: str) -> dict[str, object] | None:
+        return self._latest.get(project)
 
-    def save(self, project: str, document: object) -> None:
-        self._latest[project] = document
+    def save(self, project: str, doc: dict[str, object]) -> str:
+        self._latest[project] = doc
+        return str(doc.get("snapshot_id", ""))
 
-    def history(self, project: str) -> list[object]:
+    def history(self, project: str) -> list[dict[str, object]]:
         return self._history.get(project, [])
 
-    def append_history(self, project: str, entry: object) -> None:
+    def append_history(self, project: str, entry: dict[str, object]) -> None:
         self._history.setdefault(project, []).append(entry)
 
 
@@ -59,7 +60,8 @@ def main() -> int:
     root = Path(tempfile.mkdtemp(prefix="hkos-demo-"))
     print(f"data root: {root}")
 
-    cfg = ConfigLoader().load()
+    cfg = ConfigLoader()
+    cfg.load()
     engine = StorageEngine(
         root=str(root), config=cfg, logger=HKOSLogger(), version=VersionManager()
     )

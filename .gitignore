@@ -26,7 +26,7 @@ backups/
 .snapshots/
 *.log
 
-# ---- Secrets & credentials ----
+# ---- Credentials & keys ----
 .env
 .env.*
 *.pem

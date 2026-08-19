@@ -17,9 +17,12 @@ from tests.system.assertions import assert_retrievable
 from tests.system.ds015.fixtures import create_ds015_context
 from tests.system.fixtures import _MemoryPersistence
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_PKG_PARENT = str(_REPO_ROOT.parent)
+
 _KILL_SCRIPT = "\n".join([
     "import sys",
-    "sys.path.insert(0, '/home/dm'); sys.path.insert(0, '/home/dm/hkos')",
+    f"sys.path.insert(0, {_PKG_PARENT!r})",
     "from pathlib import Path",
     "from hkos.core.config import ConfigLoader",
     "from hkos.core.logger import HKOSLogger",
@@ -109,7 +112,7 @@ class TestFailureReadiness:
     def test_scenario_d_unexpected_shutdown(self, tmp_path: Path) -> None:
         """Process killed -> restart: нет частичных записей, нет потери."""
         subprocess.run([sys.executable, "-c", _KILL_SCRIPT, str(tmp_path)],
-                       cwd="/home/dm/hkos", check=False)
+                       cwd=str(_REPO_ROOT), check=False)
         # RESTART: повторная инициализация
         ctx = create_ds015_context(tmp_path)
         project = next(p for p in ctx.project.list() if p.name == "KillMe")

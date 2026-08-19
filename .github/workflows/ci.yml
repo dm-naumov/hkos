@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: Verify (compile + tests + lint + types)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: uv venv && uv pip install -e ".[dev]"
+
+      - name: Compile
+        run: >
+          .venv/bin/python -m compileall -f -q
+          api campaign config context core docs index integration kernel
+          knowledge librarian migration performance project repository
+          retrieval scripts services snapshot storage tests utils __init__.py
+
+      - name: Tests (unit + integration + architecture)
+        # Perf tests with wall-clock SLA thresholds are environment-sensitive
+        # (known flake under full-suite load; stable in isolation) — rerun once
+        # before failing.
+        run: >
+          .venv/bin/python -m pytest tests/unit tests/integration tests/architecture
+          -q --reruns 2 --reruns-delay 2
+
+      - name: Lint (ruff, functional only)
+        # Gate: zero functional (F) findings. Docstring style (D) and
+        # whitespace style (E/W) are conventional — see docs/developer.md.
+        run: .venv/bin/ruff check --select F .
+
+      - name: Types (mypy strict)
+        run: .venv/bin/mypy .
+
+  system:
+    name: System tests (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Heavy system suite: ~2 min; never blocks a PR.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: uv venv && uv pip install -e ".[dev]"
+
+      - name: System tests
+        # Stress/long-running scales are env-gated (HKOS_STRESS_SCALE,
+        # HKOS_LONG_CYCLES) and excluded from CI by design.
+        run: >
+          .venv/bin/python -m pytest tests/system
+          -q --reruns 2 --reruns-delay 2

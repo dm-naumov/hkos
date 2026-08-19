@@ -30,7 +30,7 @@ def seed_engineering_memory(
         tags=["openwrt", "routing"], category="DECISION",
         source_campaign=campaign_id))
     configuration = ctx.librarian.register(project_id, Knowledge(
-        title="Config AX3000T", body="lan=192.168.1.0/24, wan=pppoe",
+        title="Config AX3000T", body="lan=10.10.0.0/24, wan=pppoe",
         tags=["openwrt", "config"], category="CONFIGURATION",
         source_campaign=campaign_id))
     failure = ctx.librarian.register(project_id, Knowledge(

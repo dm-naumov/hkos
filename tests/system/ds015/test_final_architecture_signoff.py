@@ -5,6 +5,7 @@ A) Dependency integrity  B) Public API integrity  C) DS-013 compatibility.
 
 import inspect
 import os
+from pathlib import Path
 
 from hkos.performance.cache_manager import CacheManager
 from hkos.performance.context_profiles import PerformanceContextOptimizer
@@ -31,8 +32,9 @@ class TestFinalArchitectureSignoff:
                     f"{module_name}: imports hkos.{forbidden}")
         # migration не импортируется бизнес-слоями (обслуживающий верхний)
         layers = ["repository", "retrieval", "context", "snapshot", "services"]
+        repo_root = Path(__file__).resolve().parents[3]
         for layer in layers:
-            d = f"/home/dm/hkos/{layer}"
+            d = str(repo_root / layer)
             for root, _dirs, files in os.walk(d):
                 for name in files:
                     if not name.endswith(".py"):

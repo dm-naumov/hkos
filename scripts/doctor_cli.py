@@ -21,10 +21,11 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 
 class FileSnapshotPersistence:
-    """Minimal file-backed SnapshotPersistence port (atomic, append-only).
+    """File-backed SnapshotPersistence port (atomic, append-only).
 
     Layout: <root>/snapshots/<project_id>/{snapshot-NNNNN.json, order.json,
     history.json}. Writes are atomic (tmp + os.replace).
@@ -37,43 +38,46 @@ class FileSnapshotPersistence:
         return self._root / project
 
     @staticmethod
-    def _read_json(path: Path) -> object:
+    def _read_json(path: Path) -> Any:
         if not path.exists():
             return None
         return json.loads(path.read_text(encoding="utf-8"))
 
     @staticmethod
-    def _write_atomic(path: Path, data: object) -> None:
+    def _write_atomic(path: Path, data: Any) -> None:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2),
                        encoding="utf-8")
         os.replace(tmp, path)
 
-    def latest(self, project: str) -> object | None:
+    def latest(self, project: str) -> dict[str, object] | None:
         versions = self._read_json(self._project_dir(project) / "order.json")
         if not versions:
             return None
         last = versions[-1]
         name = last if isinstance(last, str) else f"snapshot-{last:05d}"
-        return self._read_json(self._project_dir(project) / f"{name}.json")
+        raw = self._read_json(self._project_dir(project) / f"{name}.json")
+        return raw if isinstance(raw, dict) else None
 
-    def version(self, project: str, version: int) -> object | None:
-        return self._read_json(
-            self._project_dir(project) / f"snapshot-{version:05d}.json")
+    def version(self, project: str, version: str) -> dict[str, object] | None:
+        raw = self._read_json(self._project_dir(project) / f"{version}.json")
+        return raw if isinstance(raw, dict) else None
 
-    def save(self, project: str, document: object) -> None:
+    def save(self, project: str, doc: dict[str, object]) -> str:
         d = self._project_dir(project)
         d.mkdir(parents=True, exist_ok=True)
         versions = self._read_json(d / "order.json") or []
         number = len(versions) + 1
-        self._write_atomic(d / f"snapshot-{number:05d}.json", document)
+        name = f"snapshot-{number:05d}"
+        self._write_atomic(d / f"{name}.json", doc)
         versions.append(number)
         self._write_atomic(d / "order.json", versions)
+        return name
 
-    def history(self, project: str) -> list[object]:
+    def history(self, project: str) -> list[dict[str, object]]:
         return self._read_json(self._project_dir(project) / "history.json") or []
 
-    def append_history(self, project: str, entry: object) -> None:
+    def append_history(self, project: str, entry: dict[str, object]) -> None:
         d = self._project_dir(project)
         d.mkdir(parents=True, exist_ok=True)
         entries = self._read_json(d / "history.json") or []
