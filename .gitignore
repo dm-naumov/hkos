@@ -1,0 +1,59 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+build/
+dist/
+*.egg
+
+# ---- Cache / tooling ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+
+# ---- HKOS runtime data (NEVER published: real knowledge, 26+ MB) ----
+# The hkos/ data root (projects, snapshots, logs) lives inside the package
+# tree and must never reach the repository.
+/hkos/
+logs/
+backups/
+.snapshots/
+*.log
+
+# ---- Secrets & credentials ----
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+credentials.json
+service-account*.json
+
+# ---- Local ops scripts (machine-specific, kept outside the repo) ----
+prod_ctx.py
+ops_snapshot_persistence.py
+check_ko.py
+retrieve_check.py
+retrieve_step0.py
+
+# ---- Reports: private review/audit packages (DS-XXX) ----
+/Reports/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

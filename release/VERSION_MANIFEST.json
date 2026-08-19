@@ -1,0 +1,56 @@
+{
+  "version": "1.0.0-prod",
+  "status": "RELEASE_CANDIDATE",
+  "build_date": "2026-08-07",
+  "components": {
+    "core": "config/logger/version/health",
+    "storage": "StorageEngine/JSONStore (HKOS-08 envelopes)",
+    "repository": "RepositoryManager/BaseRepository (SSOT)",
+    "index": "IndexEngine/QueryContract Q1-Q5/IndexCache",
+    "retrieval": "RetrievalEngine (candidates/ranking/filter/explain)",
+    "context": "ContextBuilder/ContextDocument/SnapshotLoader",
+    "snapshot": "SnapshotEngine (derived; classification via policy)",
+    "services": "Project/Campaign/Librarian/MemoryService/classification_policy",
+    "migration": "MigrationEngine (7 methods)/FSM/Registry/Backup/Rollback/Validator/VersionManifest",
+    "integration": "Hermes tools/commands/security/audit/fallback/AgentLock",
+    "performance": "PerformanceManager/Metrics/Latency/Profiler/ResourceMonitor/CacheManager/ContextOptimizer",
+    "kernel": "SnapshotDocument"
+  },
+  "tests": {
+    "unit": "807",
+    "integration": "112",
+    "system": "57 (ds014 51 + ds015 54 + signoff 18)",
+    "total": "~990"
+  },
+  "documents": {
+    "DS-001": "FOUNDATION",
+    "DS-002": "STORAGE",
+    "DS-003": "REPOSITORY",
+    "DS-004": "PROJECTS",
+    "DS-005": "CAMPAIGNS",
+    "DS-006": "LIBRARIAN",
+    "DS-007": "INDEX",
+    "DS-008": "RETRIEVAL",
+    "DS-009": "CONTEXT",
+    "DS-010": "SNAPSHOT",
+    "DS-011": "MIGRATION (Rev 1.2)",
+    "DS-012": "HERMES INTEGRATION",
+    "DS-013": "PERFORMANCE LAYER",
+    "DS-014": "SYSTEM TESTS",
+    "DS-015": "PRODUCTION READINESS"
+  },
+  "ds_status": {
+    "DS-001..DS-010": "CERTIFIED (audits A/A/B/B/B, 0 blockers)",
+    "DS-011": "COMPLETED (788+ tests)",
+    "DS-012": "COMPLETED",
+    "DS-013": "COMPLETED (manifest/cache/perf layer)",
+    "DS-014": "COMPLETED (system qualification)",
+    "DS-015": "COMPLETED (production readiness)"
+  },
+  "production_config_version": "1.0.0-prod",
+  "known_scale_characteristics": {
+    "100k_cold_retrieval": "parse O(index) ~1.1 s; warm 0.1 ms via IndexCache",
+    "1m_stress": "dedicated window (HKOS_STRESS_SCALE=1000000)",
+    "long_running_10000_cycles": "dedicated window (HKOS_LONG_CYCLES=10000)"
+  }
+}

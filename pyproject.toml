@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hkos"
+version = "1.0.0"
+description = "Deterministic, file-based engineering knowledge base for LLM agents (SSOT, retrieval, snapshots, migrations)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "Dmitry Naumov", email = "hkos_dmitry@proton.me" },
+]
+keywords = [
+    "knowledge-base",
+    "llm-agents",
+    "agent-memory",
+    "retrieval",
+    "engineering-knowledge",
+    "deterministic",
+    "ssot",
+    "python",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.0",
+    "ruff>=0.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/dnaumov/hkos"
+Documentation = "https://github.com/dnaumov/hkos#readme"
+Source = "https://github.com/dnaumov/hkos"
+
+[tool.setuptools]
+# The repository root IS the hkos package (root __init__.py), so the package
+# directory is mapped to "." and subpackages resolve to the layer dirs.
+package-dir = { "hkos" = "." }
+# Layers only. docs/, scripts/, tests/, Reports/ and the hkos/ data root are
+# intentionally excluded from the published package.
+packages = [
+    "hkos", "hkos.api", "hkos.campaign", "hkos.config", "hkos.context",
+    "hkos.core", "hkos.index", "hkos.integration", "hkos.integration.hermes",
+    "hkos.kernel", "hkos.knowledge", "hkos.librarian", "hkos.migration",
+    "hkos.performance", "hkos.project", "hkos.repository", "hkos.retrieval",
+    "hkos.services", "hkos.services.librarian", "hkos.snapshot", "hkos.storage",
+    "hkos.utils",
+]
+
+[tool.setuptools.package-data]
+"hkos.config" = ["*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = [".."]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Artifacts/duplicate packages: excluded from checking (not production)
+exclude = [
+    "^hkos/hkos/",
+    "^hkos/Reports/",
+    "^hkos/logs/",
+    "^hkos/scripts/",
+    "^hkos/docs/",
+    # tests/system: shared fixtures are imported via tests.system.*,
+    # while the hkos/ root (__init__.py DS-001) creates double module
+    # mapping (hkos.tests.* vs tests.*); the skeleton layer is verified
+    # by compilation and pytest; DS-014 ЭТАП 2 uses a dedicated mypy base.
+    "^tests/system/",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "D"]
+
+[tool.coverage.run]
+source = ["hkos"]

@@ -1,0 +1,151 @@
+# HKOS Development Configuration
+# Document: HKOS-14, DS-001
+# Version: 1.0.0
+
+hkos:
+  version: "1.0.0"
+  root: ./hkos
+  enabled: true
+
+core:
+  bootstrap:
+    auto_start: false
+    health_check_on_start: true
+  scheduler:
+    enabled: false
+
+logging:
+  level: DEBUG
+  file: ./hkos/logs/hkos.log
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  max_size_mb: 10
+  backup_count: 3
+  namespace: hkos
+
+health:
+  check_interval_seconds: 60
+  components:
+    - config
+    - logger
+    - registry
+
+
+# ===== Retrieval Engine (DS-008) =====
+retrieval:
+  ranking:
+    topic_weight: 0.25
+    confidence_weight: 0.15
+    project_weight: 0.10
+    freshness_weight: 0.10
+    usage_weight: 0.05
+    canonical_weight: 0.15
+    references_weight: 0.05
+    success_weight: 0.05
+    campaign_weight: 0.05
+    decision_weight: 0.05
+    freshness_half_life_days: 90
+    # Верхние границы нормализации факторов (0 — фактор выключен;
+    # текущее поведение: usage/references/confirmations выключены,
+    # активируются заданием caps — Audit Remediation DS-009A, задача 4).
+    usage_cap: 0
+    references_cap: 0
+    confirmations_cap: 0
+    # Базовое число кандидатов фазы-2 ранжирования (см. refine_limit).
+    refine_limit_base: 60
+  selector:
+    top_n: 20
+  builder:
+    max_candidates: 200
+    keyword_limit: 50
+  traverser:
+    max_depth: 1
+    max_related: 10
+    relation_decay: 0.8
+  parser:
+    projects:
+      openwrt: "OpenWrt"
+      phoenix contact: "Phoenix Contact"
+      "phoenix": "Phoenix Contact"
+      terminal blocks: "Terminal Blocks"
+      hermes: "Hermes"
+    topics:
+      - routing
+      - firewall
+      - tproxy
+      - dns
+      - nftables
+      - policy routing
+      - sing-box
+      - udp
+      - vpn
+    entities:
+      - tproxy
+      - tcp
+      - udp
+      - nftables
+      - fwmark
+      - sing-box
+      - openwrt
+      - warp
+      - iptables
+      - tun
+    intents:
+      diagnostics: ["почему", "не работает", "диагностик", "причина", "debug"]
+      implementation: ["реализовать", "сделать", "настроить", "установить", "implement"]
+      research: ["исследовать", "как работает", "изучить", "research"]
+      architecture: ["архитектур", "спроектировать", "design"]
+      comparison: ["сравнить", "vs", "или", "compare"]
+      validation: ["проверить", "валидировать", "verify"]
+    stopwords: ["для", "и", "в", "на", "с", "по", "из", "у", "к", "о", "что", "как", "это", "не", "при", "до", "от", "за"]
+
+
+# ===== Context Builder (DS-009) =====
+context:
+  token_estimator:
+    characters_per_token: 4
+    words_per_token: 0.75
+  profiles:
+    SMALL: 4000
+    MEDIUM: 8000
+    LARGE: 16000
+    FULL: 0
+  snapshot:
+    dir: "snapshots"
+  serializer:
+    body_limit: 200
+    sections:
+      - TASK
+      - PROJECT
+      - CURRENT STATE
+      - CANONICAL KNOWLEDGE
+      - DECISIONS
+      - FAILURES
+      - ARTIFACTS
+      - CONFIGURATION
+      - OPEN QUESTIONS
+
+
+# ===== Hermes Integration Security (DS-012 §8) =====
+security:
+  enabled: true
+  require_confirmation:
+    migration: true
+    rollback: true
+  audit_log:
+    enabled: true
+  fallback:
+    retrieval: true
+    librarian_queue: true
+
+
+# ===== Performance Layer (DS-013 ЭТАП 5 §9) =====
+performance:
+  enabled: true
+  cache:
+    enabled: true
+    max_entries: 1000
+    ttl_seconds: 3600
+  context:
+    compression: normal
+  metrics:
+    enabled: true

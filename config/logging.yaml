@@ -1,0 +1,44 @@
+# HKOS Logging Configuration
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  detailed:
+    format: "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: standard
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: ./hkos/logs/hkos.log
+    maxBytes: 10485760
+    backupCount: 3
+  performance_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: detailed
+    filename: ./hkos/logs/performance.log
+    maxBytes: 10485760
+    backupCount: 3
+
+loggers:
+  hkos:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+  hkos.performance:
+    level: INFO
+    handlers: [performance_file]
+    propagate: false
+
+root:
+  level: WARNING
+  handlers: [console]
