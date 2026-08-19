@@ -10,6 +10,8 @@ performance метрики; масштабирование 100/1000/10000 (retri
 import time
 from pathlib import Path
 
+import pytest
+
 from hkos.core.logger import HKOSLogger
 from hkos.performance.integration import PerformanceIntegration
 from hkos.repository.models import Knowledge
@@ -93,6 +95,7 @@ class TestMemoryGrowthSystem:
         measured.retrieve("udp", project_id=project.id)
         assert_performance_recorded(perf.manager, "retrieval")
 
+    @pytest.mark.sla
     def test_retrieval_scaling(self, tmp_path: Path) -> None:
         """100/1000/10000: retrieval <100 мс; cache hit; контекст."""
         ctx = create_system_context(tmp_path)
