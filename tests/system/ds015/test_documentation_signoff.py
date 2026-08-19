@@ -41,7 +41,7 @@ class TestDocumentationSignoff:
     def test_versions_match(self) -> None:
         """Версии конфига и release совпадают."""
         config = yaml.safe_load(CONFIG_PROD.read_text())
-        assert config["hkos"]["version"] == "1.0.0"
+        assert config["hkos"]["version"] == "1.0.1"
 
     def test_production_config_described(self) -> None:
         docs_text = " ".join(

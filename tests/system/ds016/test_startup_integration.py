@@ -15,7 +15,7 @@ class TestStartupIntegration:
 
     def test_production_config_and_initialize(self, tmp_path: Path) -> None:
         ctx = create_hermes_context(tmp_path)
-        assert ctx.config.get("hkos.version") == "1.0.0"
+        assert ctx.config.get("hkos.version") == "1.0.1"
         assert ctx.engine.health() is not None
 
     def test_repeat_initialize_idempotent(self, tmp_path: Path) -> None:

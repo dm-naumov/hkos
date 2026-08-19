@@ -42,7 +42,7 @@ class TestStorageEngine:
         report = engine.health()
         assert report["status"] == "PASS"
         assert report["initialized"] is True
-        assert report["version"] == "1.0.0"
+        assert report["version"] == "1.0.1"
 
     def test_health_fail_without_root(self, tmp_path: Path) -> None:
         engine = self._engine(tmp_path, root=str(tmp_path / "missing"))

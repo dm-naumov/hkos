@@ -104,7 +104,7 @@ class TestMcpServerProtocol:
             assert init is not None and "result" in init
             info = init["result"]["serverInfo"]
             assert info["name"] == "hkos-mcp"
-            assert info["version"] == "1.0.0"
+            assert info["version"] == "1.0.1"
             assert "tools" in init["result"]["capabilities"]
 
             client.send("notifications/initialized", {}, notify=True)
@@ -123,7 +123,7 @@ class TestMcpServerProtocol:
             status, is_error = client.call("status", {})
             assert not is_error
             assert status["ready"] is True
-            assert status["version"] == "1.0.0"
+            assert status["version"] == "1.0.1"
             assert status["projects"] == 0
             assert status["knowledge_total"] == 0
         finally:

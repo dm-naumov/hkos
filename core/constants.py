@@ -7,7 +7,7 @@ No magic strings in code — all constants must be defined here.
 # --- Version ---
 VERSION_MAJOR: int = 1
 VERSION_MINOR: int = 0
-VERSION_PATCH: int = 0
+VERSION_PATCH: int = 1
 VERSION_BUILD: str = ""  # empty = release build ("dev" during development)
 VERSION_STRING: str = (
     f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"

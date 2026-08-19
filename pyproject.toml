@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hkos"
-version = "1.0.0"
+version = "1.0.1"
 description = "Deterministic, file-based engineering knowledge base for LLM agents (SSOT, retrieval, snapshots, migrations)"
 readme = "README.md"
 requires-python = ">=3.12"

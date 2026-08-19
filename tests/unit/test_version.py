@@ -19,7 +19,7 @@ class TestVersionManager:
         assert self.vm.version.minor == 0
 
     def test_version_info_patch(self) -> None:
-        assert self.vm.version.patch == 0
+        assert self.vm.version.patch == 1
 
     def test_version_string_non_empty(self) -> None:
         assert len(self.vm.version_string) > 0
