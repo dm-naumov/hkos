@@ -3,7 +3,7 @@
 [![CI](https://github.com/dm-naumov/hkos/actions/workflows/ci.yml/badge.svg)](https://github.com/dm-naumov/hkos/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-990%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-987%2B-brightgreen.svg)]()
 [![mypy](https://img.shields.io/badge/mypy-strict-2ea44f.svg)]()
 [![ruff](https://img.shields.io/badge/ruff-0%20functional%20findings-2ea44f.svg)]()
 
@@ -199,10 +199,10 @@ Measured on a stock Linux workstation, corpus generated deterministically
 
 ## Quality
 
-- **990+ tests** — 807 unit, 112 integration, 51+ system-level scenarios
-  (pipeline, lifecycle, 10K growth, consistency, failure recovery, concurrent
-  agents, migration, security, 100K stress, long-running, operational).
-- **mypy --strict: 0 errors** across 272 files.
+- **987 unit + integration tests** (plus system-level scenarios — pipeline,
+  lifecycle, growth, consistency, failure recovery, concurrent agents,
+  migration, security, stress).
+- **mypy --strict: 0 errors** across 453 files.
 - **ruff: 0 functional findings** (docstring style only).
 - **compileall: clean.**
 - All layers tested at unit + integration level; system tests exercise only
@@ -273,14 +273,17 @@ anything that speaks MCP.
 - [Troubleshooting](docs/troubleshooting.md)
 - [Administrator guide](docs/administrator.md)
 
-## Roadmap
+## Releases & roadmap
 
-- **v1.0** — current: core, storage, repository, index, retrieval, context,
+- **v1.0 (released)** — core, storage, repository, index, retrieval, context,
   snapshot, services, migration, integration, performance layers.
-- **v1.1** — MCP adapter (stdio server for any MCP client), semantic search as
-  an *optional* backend (SSOT untouched), CLI package.
-- **v1.2** — SQLite index backend (delta writes, `hkos migrate`, same API),
-  cross-project relationship traversal (deterministic, via Q4).
+- **v1.1 (released)** — graph authoring (`relations[]` with engineering
+  relation types and cross-project targets), deterministic save transparency
+  (rule ids + warnings), `hkos` CLI, ecosystem presets (Cursor/Windsurf,
+  LangChain/AutoGen), Failure-Priority ranking.
+- **v1.2 (released)** — SQLite index backend (delta writes, `hkos migrate`,
+  same API), cross-project relationship traversal (deterministic, via Q4).
+- **Next** — semantic search as an *optional* backend (SSOT untouched), FTS5.
 
 ## License
 
