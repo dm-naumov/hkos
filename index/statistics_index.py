@@ -12,7 +12,7 @@ from typing import Any
 
 from hkos.index.entity_index import EntityIndex
 
-__all__ = ["StatisticsIndex"]
+__all__ = ["StatisticsIndex", "STAT_TYPES", "stat_key"]
 
 # Маппинг типов сущностей (repo _type_name) -> ключ статистики.
 _STAT_KEYS: dict[str, str] = {
@@ -23,9 +23,14 @@ _STAT_KEYS: dict[str, str] = {
     "artifact": "artifacts",
 }
 
-_STAT_TYPES: tuple[str, ...] = (
+STAT_TYPES: tuple[str, ...] = (
     "knowledge", "decisions", "campaigns", "projects", "artifacts",
 )
+
+
+def stat_key(entity_type: str) -> str | None:
+    """Ключ статистики для типа сущности (None — тип не учитывается)."""
+    return _STAT_KEYS.get(entity_type)
 
 
 class StatisticsIndex:
@@ -37,7 +42,7 @@ class StatisticsIndex:
         statistics = loaded.get("statistics", {})
         self._data: dict[str, Any] = {
             "statistics": {
-                key: int(statistics.get(key, 0) or 0) for key in _STAT_TYPES
+                key: int(statistics.get(key, 0) or 0) for key in STAT_TYPES
             }
         }
 
@@ -47,7 +52,7 @@ class StatisticsIndex:
 
     def increment(self, entity_type: str, delta: int) -> None:
         """Изменить счётчик типа на delta (инкрементальное обновление)."""
-        key = _STAT_KEYS.get(entity_type)
+        key = stat_key(entity_type)
         if key is None:
             return
         self._data["statistics"][key] = max(

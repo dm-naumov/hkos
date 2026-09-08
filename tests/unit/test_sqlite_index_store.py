@@ -202,3 +202,77 @@ class TestSqliteIndexStore:
             assert first is not None
             ctx.mirror(pid, name, first)  # read→write повторно
             assert ctx.sqlite_data(pid, name) == first
+
+
+class TestSqliteDeltaUpdate:
+    """IP-017-v1.2 ЭТАП 1b: дельта update_entity/remove_entity.
+
+    Пошаговые операции (добавление/модификация/удаление) выполняются на
+    JSON-пути (IndexEngine.update/remove — эталон) и на sqlite
+    (update_entity/remove_entity); после КАЖДОГО шага все 5 доков равны.
+    """
+
+    def test_incremental_ops_match_json(self, tmp_path: Path) -> None:
+        ctx = SqliteContext(tmp_path)
+        pid = ctx.projects.create(name="Delta", tags=["t"]).id
+
+        def register(title: str, body: str, tags: list[str],
+                     kind: str = "fact") -> str:
+            k = ctx.librarian.register(pid, Knowledge(
+                title=title, body=body, tags=tags, kind=kind))
+            ctx.index.update(pid, k.id, "knowledge")
+            ctx.sqlite_store.update_entity(
+                pid, ctx.repos.knowledge.load(pid, k.id), "knowledge")
+            return k.id
+
+        # 1) добавление: факт + negative (слова/теги пересекаются)
+        a = register("udp tproxy fix", "routing table fwmark", ["udp", "t"])
+        register("udp breakage mtu", "mtu 1400 kills udp", ["udp", "mtu"],
+                 kind="negative")
+        _assert_all_equal(ctx, pid)
+        # 2) модификация существующей сущности (слова изменились)
+        changed = ctx.repos.knowledge.load(pid, a)
+        changed.body = "completely different body dns"
+        changed.tags = ["dns"]
+        ctx.repos.knowledge.update(changed)
+        fresh = ctx.repos.knowledge.load(pid, a)
+        ctx.index.update(pid, a, "knowledge")
+        ctx.sqlite_store.update_entity(pid, fresh, "knowledge")
+        _assert_all_equal(ctx, pid)
+        # 3) удаление из индексов (репозиторий не трогаем — как JSON remove)
+        ctx.index.remove(pid, a, "knowledge")
+        ctx.sqlite_store.remove_entity(pid, a, "knowledge")
+        _assert_all_equal(ctx, pid)
+
+    def test_statistics_delta_counts(self, tmp_path: Path) -> None:
+        ctx = SqliteContext(tmp_path)
+        pid = ctx.projects.create(name="Stats", tags=["t"]).id
+        k1 = ctx.librarian.register(pid, Knowledge(title="one udp fact", body="a"))
+        k2 = ctx.librarian.register(pid, Knowledge(title="two udp fact", body="b"))
+        k3 = ctx.librarian.register(
+            pid, Knowledge(title="three negative udp", body="c", kind="negative"))
+        for k in (k1, k2, k3):
+            ctx.sqlite_store.update_entity(
+                pid, ctx.repos.knowledge.load(pid, k.id), "knowledge")
+        stats = ctx.sqlite_data(pid, "statistics")
+        assert stats is not None
+        stats_statistics = stats["statistics"]
+        assert isinstance(stats_statistics, dict)
+        counts = stats_statistics
+        # все 3 сущности — knowledge (negative kind не меняет тип сущности)
+        assert counts["knowledge"] == 3 and counts["decisions"] == 0
+        # удаление: счётчик уменьшается
+        ctx.sqlite_store.remove_entity(pid, k3.id, "knowledge")
+        stats2 = ctx.sqlite_data(pid, "statistics")
+        assert stats2 is not None
+        stats2_statistics = stats2["statistics"]
+        assert isinstance(stats2_statistics, dict)
+        assert stats2_statistics["knowledge"] == 2
+
+
+def _assert_all_equal(ctx: SqliteContext, pid: str) -> None:
+    """Все 5 доков sqlite == json (после операции)."""
+    for name in _INDEX_NAMES:
+        json_data = ctx.json_data(pid, name)
+        assert json_data is not None, name
+        assert ctx.sqlite_data(pid, name) == json_data, name

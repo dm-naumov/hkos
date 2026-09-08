@@ -24,6 +24,10 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from hkos.index.entity_index import build_entity_record
+from hkos.index.keyword_index import KeywordIndex, indexable_text
+from hkos.index.statistics_index import STAT_TYPES, stat_key
+from hkos.index.tag_index import indexable_tags
 from hkos.storage.path_manager import PathManager
 from hkos.storage.storage_engine import StorageEngine
 
@@ -37,6 +41,15 @@ _INDEX_NAMES: tuple[str, ...] = (
 )
 
 # Типы сущностей для statistics — только в codecs (data приходит из JSON-дока).
+
+
+def _relation_type_str(relation: Any) -> str:
+    """Строковый тип отношения (enum -> value, как _relation_to_record)."""
+    relation_type = getattr(relation, "relation_type", "")
+    if isinstance(relation_type, str):
+        return relation_type
+    value = getattr(relation_type, "value", relation_type)
+    return str(value)
 
 
 class SqliteIndexStore:
@@ -82,8 +95,7 @@ class SqliteIndexStore:
                 project TEXT NOT NULL,
                 PRIMARY KEY(tag, id));
             CREATE TABLE IF NOT EXISTS tg_et(
-                entity_id TEXT NOT NULL, tag TEXT NOT NULL, seq INTEGER NOT NULL,
-                PRIMARY KEY(entity_id, tag));
+                entity_id TEXT NOT NULL, tag TEXT NOT NULL, seq INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS en(
                 id TEXT PRIMARY KEY, project TEXT NOT NULL, type TEXT NOT NULL,
                 title TEXT NOT NULL, status TEXT NOT NULL,
@@ -178,6 +190,150 @@ class SqliteIndexStore:
         finally:
             con.close()
 
+    # --- Дельта-обновление одной сущности (DS-017 §4.1.3) ---
+
+    def update_entity(
+        self, project: str, entity: Any, entity_type: str
+    ) -> None:
+        """Полная замена записей ОДНОЙ сущности в одной транзакции.
+
+        Эквивалент инкрементального update JSON-пути: старые строки сущности
+        удаляются, новые вставляются (слова/теги/запись/отношения),
+        статистика меняется дельтой. Стоимость O(размер сущности),
+        не O(корпуса) — устраняет write amplification файловых .idx.
+        """
+        con = self._connect(project)
+        try:
+            with con:
+                old_row = con.execute(
+                    "SELECT type FROM en WHERE id=?", (entity.id,)
+                ).fetchone()
+                old_type = old_row[0] if old_row else None
+                self._delete_entity_rows(con, entity.id)
+
+                words = KeywordIndex.tokenize(indexable_text(entity))
+                for word in words:
+                    con.execute(
+                        "INSERT INTO kw(word, id, type, project)"
+                        " VALUES(?,?,?,?)",
+                        (word, entity.id, entity_type, project),
+                    )
+                for offset, word in enumerate(words):
+                    con.execute(
+                        "INSERT INTO kw_ew(entity_id, word, seq)"
+                        " VALUES(?,?,?)",
+                        (entity.id, word, offset),
+                    )
+                tags = indexable_tags(entity)
+                for tag in tags:
+                    con.execute(
+                        "INSERT INTO tg(tag, id, type, project)"
+                        " VALUES(?,?,?,?)",
+                        (tag, entity.id, entity_type, project),
+                    )
+                for offset, tag in enumerate(tags):
+                    con.execute(
+                        "INSERT INTO tg_et(entity_id, tag, seq) VALUES(?,?,?)",
+                        (entity.id, tag, offset),
+                    )
+                record = build_entity_record(entity, entity_type, project)
+                con.execute(
+                    "INSERT INTO en(id, project, type, title, status,"
+                    " category, tags_json, updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                    (
+                        entity.id, record["project"], record["type"],
+                        record["title"], record["status"], record["category"],
+                        json.dumps(record["tags"], ensure_ascii=False),
+                        record["updated_at"],
+                    ),
+                )
+                if entity_type == "knowledge":
+                    for rel in getattr(entity, "relations", None) or []:
+                        con.execute(
+                            "INSERT INTO rel(relation_id, owner_id, source_id,"
+                            " target_id, relation_type, created_at)"
+                            " VALUES(?,?,?,?,?,?)",
+                            (
+                                str(getattr(rel, "relation_id", "") or ""),
+                                entity.id,
+                                str(getattr(rel, "source_id", "")
+                                    or entity.id),
+                                str(getattr(rel, "target_id", "") or ""),
+                                _relation_type_str(rel),
+                                str(getattr(rel, "created_at", "") or ""),
+                            ),
+                        )
+                # статистика: дельта (как IndexUpdater: смена типа -> -1/+1;
+                # тот же тип -> без изменений; новая сущность -> +1)
+                new_key = stat_key(entity_type)
+                old_key = stat_key(old_type) if old_type else None
+                if old_type is None:
+                    self._bump_stat(con, new_key, +1)
+                elif old_key != new_key:
+                    self._bump_stat(con, old_key, -1)
+                    self._bump_stat(con, new_key, +1)
+                self._mark_all_present(con)
+        finally:
+            con.close()
+
+    def remove_entity(
+        self, project: str, entity_id: str, entity_type: str
+    ) -> None:
+        """Удалить записи сущности из индексов (дельта, одна транзакция)."""
+        con = self._connect(project)
+        try:
+            with con:
+                old_row = con.execute(
+                    "SELECT type FROM en WHERE id=?", (entity_id,)
+                ).fetchone()
+                old_type = old_row[0] if old_row else None
+                self._delete_entity_rows(con, entity_id)
+                if old_type is not None:
+                    key = stat_key(old_type)
+                    if key is not None:
+                        self._bump_stat(con, key, -1)
+                self._mark_all_present(con)
+        finally:
+            con.close()
+
+    @staticmethod
+    def _delete_entity_rows(con: sqlite3.Connection, entity_id: str) -> None:
+        """Удалить все строки сущности (посты/слова/теги/запись/рёбра)."""
+        con.execute("DELETE FROM kw WHERE id=?", (entity_id,))
+        con.execute("DELETE FROM kw_ew WHERE entity_id=?", (entity_id,))
+        con.execute("DELETE FROM tg WHERE id=?", (entity_id,))
+        con.execute("DELETE FROM tg_et WHERE entity_id=?", (entity_id,))
+        con.execute("DELETE FROM en WHERE id=?", (entity_id,))
+        # рёбра, владельцем которых была сущность (чужие ребра на цель
+        # остаются — висячие ссылки выявляет doctor)
+        con.execute("DELETE FROM rel WHERE owner_id=?", (entity_id,))
+
+    @staticmethod
+    def _bump_stat(
+        con: sqlite3.Connection, key: str | None, delta: int
+    ) -> None:
+        """Изменить счётчик (создать при отсутствии, не ниже нуля)."""
+        if key is None:
+            return
+        row = con.execute(
+            "SELECT count FROM st WHERE key=?", (key,)
+        ).fetchone()
+        current = row[0] if row else 0
+        con.execute(
+            "INSERT OR REPLACE INTO st(key, count) VALUES(?,?)",
+            (key, max(0, int(current) + delta)),
+        )
+
+    def _mark_all_present(self, con: sqlite3.Connection) -> None:
+        """Пометить все 5 индекс-доков существующими (как JSON-запись всех
+        файлов при update)."""
+        for name in _INDEX_NAMES:
+            con.execute(
+                "INSERT INTO meta(name, present) VALUES(?, 1) "
+                "ON CONFLICT(name) DO UPDATE SET present=1",
+                (name,),
+            )
+
     def fingerprint(self, project: str) -> tuple[tuple[str, int, int], ...]:
         """Отпечаток файла БД ((имя, mtime_ns, size)); отсутствует -> -1."""
         path = self._db_path(project)
@@ -231,13 +387,11 @@ class SqliteIndexStore:
                     "INSERT INTO kw(word, id, type, project) VALUES(?,?,?,?)",
                     (word, entry["id"], entry["type"], entry["project"]),
                 )
-        for seq, (entity_id, words) in enumerate(
-            data.get("entity_words", {}).items()
-        ):
+        for entity_id, words in data.get("entity_words", {}).items():
             for offset, word in enumerate(words):
                 con.execute(
                     "INSERT INTO kw_ew(entity_id, word, seq) VALUES(?,?,?)",
-                    (entity_id, word, seq * 100_000 + offset),
+                    (entity_id, word, offset),
                 )
 
     @staticmethod
@@ -249,13 +403,11 @@ class SqliteIndexStore:
                     "INSERT INTO tg(tag, id, type, project) VALUES(?,?,?,?)",
                     (tag, entry["id"], entry["type"], entry["project"]),
                 )
-        for seq, (entity_id, entity_tags) in enumerate(
-            data.get("entity_tags", {}).items()
-        ):
+        for entity_id, entity_tags in data.get("entity_tags", {}).items():
             for offset, tag in enumerate(entity_tags):
                 con.execute(
                     "INSERT INTO tg_et(entity_id, tag, seq) VALUES(?,?,?)",
-                    (entity_id, tag, seq * 100_000 + offset),
+                    (entity_id, tag, offset),
                 )
 
     @staticmethod
@@ -334,7 +486,7 @@ class SqliteIndexStore:
             })
         entity_words: dict[str, list[str]] = {}
         for row in con.execute(
-            "SELECT entity_id, word FROM kw_ew ORDER BY seq"
+            "SELECT entity_id, word FROM kw_ew ORDER BY entity_id, seq"
         ):
             entity_words.setdefault(row[0], []).append(row[1])
         return {"postings": postings, "entity_words": entity_words}
@@ -350,7 +502,7 @@ class SqliteIndexStore:
             })
         entity_tags: dict[str, list[str]] = {}
         for row in con.execute(
-            "SELECT entity_id, tag FROM tg_et ORDER BY seq"
+            "SELECT entity_id, tag FROM tg_et ORDER BY entity_id, seq"
         ):
             entity_tags.setdefault(row[0], []).append(row[1])
         return {"tags": tags, "entity_tags": entity_tags}
@@ -398,7 +550,7 @@ class SqliteIndexStore:
 
     @staticmethod
     def _read_statistics(con: sqlite3.Connection) -> dict[str, Any]:
-        statistics: dict[str, int] = {}
+        statistics: dict[str, int] = {key: 0 for key in STAT_TYPES}
         for row in con.execute("SELECT key, count FROM st"):
             statistics[row[0]] = row[1]
         return {"statistics": statistics}

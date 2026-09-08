@@ -11,7 +11,34 @@
 
 from typing import Any
 
-__all__ = ["EntityIndex"]
+__all__ = ["EntityIndex", "build_entity_record"]
+
+
+def build_entity_record(
+    entity: Any, entity_type: str, project: str
+) -> dict[str, Any]:
+    """Запись сущности для Entity Index (единый источник формата).
+
+    Используется EntityIndex.upsert и SQLite-бэкендом (DS-017 §4.1) —
+    формат записи не дублируется.
+    """
+    tags = [str(t) for t in (getattr(entity, "tags", None) or [])]
+    title = (
+        getattr(entity, "title", None)
+        or getattr(entity, "name", None)
+        or getattr(entity, "goal", None)
+        or ""
+    )
+    return {
+        "id": entity.id,
+        "project": project,
+        "type": entity_type,
+        "title": str(title),
+        "status": str(getattr(entity, "status", "") or ""),
+        "category": str(getattr(entity, "category", "") or ""),
+        "tags": tags,
+        "updated_at": str(getattr(entity, "updated_at", "") or ""),
+    }
 
 
 class EntityIndex:
@@ -28,23 +55,9 @@ class EntityIndex:
         project: str,
     ) -> None:
         """Добавить или обновить запись сущности."""
-        tags = [str(t) for t in (getattr(entity, "tags", None) or [])]
-        title = (
-            getattr(entity, "title", None)
-            or getattr(entity, "name", None)
-            or getattr(entity, "goal", None)
-            or ""
+        self._data["entities"][entity.id] = build_entity_record(
+            entity, entity_type, project
         )
-        self._data["entities"][entity.id] = {
-            "id": entity.id,
-            "project": project,
-            "type": entity_type,
-            "title": str(title),
-            "status": str(getattr(entity, "status", "") or ""),
-            "category": str(getattr(entity, "category", "") or ""),
-            "tags": tags,
-            "updated_at": str(getattr(entity, "updated_at", "") or ""),
-        }
 
     def remove(self, entity_id: str) -> None:
         """Удалить запись сущности."""
