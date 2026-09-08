@@ -258,7 +258,8 @@ anything that speaks MCP.
 - **Demo** — “Git for agent memory”: an agent without HKOS repeats a past
   failure, an agent with HKOS retrieves the FAILURE record and takes the right
   path (deterministic, zero LLM): `python examples/demo_failure_recovery.py`.
-- **CLI** — `hkos doctor | status | validate` for terminal audits
+- **CLI** — `hkos doctor | status | validate | migrate` for terminal audits
+  and explicit JSON→SQLite index migration (`migrate --check` dry-run first)
   (see [docs/administrator.md](docs/administrator.md)).
 
 ## Documentation

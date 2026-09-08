@@ -247,11 +247,18 @@ class SqliteIndexStore:
                         " VALUES(?,?,?,?)",
                         (word, entity.id, entity_type, project),
                     )
-                for offset, word in enumerate(words):
+                if words:
+                    for offset, word in enumerate(words):
+                        con.execute(
+                            "INSERT INTO kw_ew(entity_id, word, seq)"
+                            " VALUES(?,?,?)",
+                            (entity.id, word, offset),
+                        )
+                else:
                     con.execute(
                         "INSERT INTO kw_ew(entity_id, word, seq)"
                         " VALUES(?,?,?)",
-                        (entity.id, word, offset),
+                        (entity.id, "", -1),
                     )
                 tags = indexable_tags(entity)
                 for tag in tags:
@@ -260,10 +267,18 @@ class SqliteIndexStore:
                         " VALUES(?,?,?,?)",
                         (tag, entity.id, entity_type, project),
                     )
-                for offset, tag in enumerate(tags):
+                if tags:
+                    for offset, tag in enumerate(tags):
+                        con.execute(
+                            "INSERT INTO tg_et(entity_id, tag, seq)"
+                            " VALUES(?,?,?)",
+                            (entity.id, tag, offset),
+                        )
+                else:
                     con.execute(
-                        "INSERT INTO tg_et(entity_id, tag, seq) VALUES(?,?,?)",
-                        (entity.id, tag, offset),
+                        "INSERT INTO tg_et(entity_id, tag, seq)"
+                        " VALUES(?,?,?)",
+                        (entity.id, "", -1),
                     )
                 record = build_entity_record(entity, entity_type, project)
                 con.execute(
@@ -417,10 +432,17 @@ class SqliteIndexStore:
                     (word, entry["id"], entry["type"], entry["project"]),
                 )
         for entity_id, words in data.get("entity_words", {}).items():
-            for offset, word in enumerate(words):
+            if words:
+                for offset, word in enumerate(words):
+                    con.execute(
+                        "INSERT INTO kw_ew(entity_id, word, seq) VALUES(?,?,?)",
+                        (entity_id, word, offset),
+                    )
+            else:
+                # маркер пустого списка (JSON хранит entity_words[id]=[])
                 con.execute(
                     "INSERT INTO kw_ew(entity_id, word, seq) VALUES(?,?,?)",
-                    (entity_id, word, offset),
+                    (entity_id, "", -1),
                 )
 
     @staticmethod
@@ -433,10 +455,17 @@ class SqliteIndexStore:
                     (tag, entry["id"], entry["type"], entry["project"]),
                 )
         for entity_id, entity_tags in data.get("entity_tags", {}).items():
-            for offset, tag in enumerate(entity_tags):
+            if entity_tags:
+                for offset, tag in enumerate(entity_tags):
+                    con.execute(
+                        "INSERT INTO tg_et(entity_id, tag, seq) VALUES(?,?,?)",
+                        (entity_id, tag, offset),
+                    )
+            else:
+                # маркер пустого списка (JSON хранит entity_tags[id]=[])
                 con.execute(
                     "INSERT INTO tg_et(entity_id, tag, seq) VALUES(?,?,?)",
-                    (entity_id, tag, offset),
+                    (entity_id, "", -1),
                 )
 
     @staticmethod
@@ -515,8 +544,11 @@ class SqliteIndexStore:
             })
         entity_words: dict[str, list[str]] = {}
         for row in con.execute(
-            "SELECT entity_id, word FROM kw_ew ORDER BY entity_id, seq"
+            "SELECT entity_id, word, seq FROM kw_ew ORDER BY entity_id, seq"
         ):
+            if row[2] == -1:
+                entity_words.setdefault(row[0], [])
+                continue
             entity_words.setdefault(row[0], []).append(row[1])
         return {"postings": postings, "entity_words": entity_words}
 
@@ -531,8 +563,11 @@ class SqliteIndexStore:
             })
         entity_tags: dict[str, list[str]] = {}
         for row in con.execute(
-            "SELECT entity_id, tag FROM tg_et ORDER BY entity_id, seq"
+            "SELECT entity_id, tag, seq FROM tg_et ORDER BY entity_id, seq"
         ):
+            if row[2] == -1:
+                entity_tags.setdefault(row[0], [])
+                continue
             entity_tags.setdefault(row[0], []).append(row[1])
         return {"tags": tags, "entity_tags": entity_tags}
 

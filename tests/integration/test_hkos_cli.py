@@ -16,6 +16,7 @@ from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
 from hkos.index import IndexCache, IndexEngine, IndexQueryExecutor, IndexStore
+from hkos.index.sqlite_store import SqliteIndexStore
 from hkos.repository.models import Knowledge
 from hkos.repository.repository_manager import RepositoryManager
 from hkos.services.librarian import Librarian
@@ -161,3 +162,60 @@ class TestHkosCli:
         )
         assert proc.returncode == 0, proc.stdout
         assert "PASS" in proc.stdout
+
+
+class TestMigrateCommand:
+    """IP-017-v1.2 ЭТАП 3: hkos migrate — явная JSON->SQLite миграция."""
+
+    def test_migrate_check_then_migrate_then_skip(
+        self, tmp_path: Path
+    ) -> None:
+        """check -> migrate -> повторный skip -> --force перезапишет."""
+        root = tmp_path / "root"
+        root.mkdir()
+        pid = seed_root(root, with_index=True)
+
+        # --check: ничего не пишет
+        code, out = run_cli(root, "migrate", "--project", pid, "--check")
+        assert code == 0, out
+        assert "pending" in out or "JSON docs" in out, out
+        db = root / "projects" / pid / "indexes" / "index_store.db"
+        assert not db.exists(), "check must not write the db"
+
+        # migrate: json -> sqlite
+        code, out = run_cli(root, "migrate", "--project", pid)
+        assert code == 0, out
+        assert "migrated" in out, out
+        assert db.exists(), out
+
+        # данные совпадают с JSON-источником (5 доков)
+        cfg = ConfigLoader(profile="production")
+        cfg.load()
+        engine = StorageEngine(
+            root=str(root), config=cfg, logger=HKOSLogger(),
+            version=VersionManager())
+        engine.initialize()
+        json_store = IndexStore(engine)
+        sqlite_store = SqliteIndexStore(engine)
+        for name in ("keyword", "tags", "entities", "relations",
+                     "statistics"):
+            assert sqlite_store.read(pid, name) == json_store.read(pid, name)
+
+        # повторный запуск: skip (уже на SQLite)
+        code, out = run_cli(root, "migrate", "--project", pid)
+        assert code == 0, out
+        assert "skipped" in out, out
+        # --force: перезапись из JSON
+        code, out = run_cli(root, "migrate", "--project", pid, "--force")
+        assert code == 0, out
+        assert "migrated" in out, out
+
+    def test_migrate_all_projects(self, tmp_path: Path) -> None:
+        """Без --project мигрируются все проекты с JSON-индексами."""
+        root = tmp_path / "root"
+        root.mkdir()
+        pid = seed_root(root, with_index=True)
+        code, out = run_cli(root, "migrate")
+        assert code == 0, out
+        assert "migrated" in out, out
+        assert (root / "projects" / pid / "indexes" / "index_store.db").exists()
