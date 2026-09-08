@@ -19,7 +19,7 @@ from typing import Any, TypeAlias
 
 from hkos.index.entity_index import EntityIndex
 from hkos.index.index_builder import _index_doc
-from hkos.index.index_store import IndexStore
+from hkos.index.query_contract import IndexStoreLike, SqliteStoreLike
 from hkos.index.keyword_index import KeywordIndex, indexable_text
 from hkos.index.relationship_index import RelationshipIndex
 from hkos.index.statistics_index import StatisticsIndex
@@ -49,13 +49,13 @@ class IndexUpdater:
     """Инкрементальное обновление индексов (дельта-изменения)."""
 
     def __init__(
-        self, repositories: RepositoryManager, store: IndexStore
+        self, repositories: RepositoryManager, store: IndexStoreLike
     ) -> None:
         """Инициализация апдейтера.
 
         Args:
             repositories: RepositoryManager — чтение сущностей.
-            store: IndexStore — персистентность файлов индексов.
+            store: IndexStoreLike — персистентность файлов индексов.
 
         """
         self._repositories = repositories
@@ -113,7 +113,13 @@ class IndexUpdater:
             entity_id: UUID сущности.
             entity_type: project|campaign|knowledge|decision|artifact.
 
+        SQLite-бэкенд (store — SqliteStoreLike): дельта O(размер сущности)
+        в одной транзакции, без перезаписи корпуса.
         """
+        if isinstance(self._store, SqliteStoreLike):
+            entity = self._load_entity(entity_type, project, entity_id)
+            self._store.update_entity(project, entity, entity_type)
+            return
         keyword, tags, entities, relations, statistics = self._load_indexes(
             project
         )
@@ -157,7 +163,11 @@ class IndexUpdater:
             entity_id: UUID сущности.
             entity_type: project|campaign|knowledge|decision|artifact.
 
+        SQLite-бэкенд (store — SqliteStoreLike): дельта-удаление.
         """
+        if isinstance(self._store, SqliteStoreLike):
+            self._store.remove_entity(project, entity_id, entity_type)
+            return
         keyword, tags, entities, relations, statistics = self._load_indexes(
             project
         )

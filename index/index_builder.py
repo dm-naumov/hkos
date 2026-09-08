@@ -10,7 +10,7 @@ build(): O(N) чтений (все сущности проекта через Re
 from typing import Any, TypeAlias
 
 from hkos.index.entity_index import EntityIndex
-from hkos.index.index_store import IndexStore
+from hkos.index.query_contract import IndexStoreLike
 from hkos.index.keyword_index import KeywordIndex, indexable_text
 from hkos.index.relationship_index import RelationshipIndex
 from hkos.index.statistics_index import StatisticsIndex
@@ -59,13 +59,13 @@ class IndexBuilder:
     """Построение полного набора индексов проекта."""
 
     def __init__(
-        self, repositories: RepositoryManager, store: IndexStore
+        self, repositories: RepositoryManager, store: IndexStoreLike
     ) -> None:
         """Инициализация строителя.
 
         Args:
             repositories: RepositoryManager — чтение сущностей.
-            store: IndexStore — персистентность файлов индексов.
+            store: IndexStoreLike — персистентность файлов индексов.
 
         """
         self._repositories = repositories

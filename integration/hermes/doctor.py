@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from hkos.core.logger import HKOSLogger
-from hkos.index import IndexSnapshot
+from hkos.index import IndexSnapshot, SqliteStoreLike
 
 __all__ = ["ConsistencyIssue", "ConsistencyReport", "HkosDoctor"]
 
@@ -211,7 +211,10 @@ class HkosDoctor:
         # и не может «потеряться»; orphans считаются по содержательным типам.
         # knowledge_docs материализуются ОДИН раз и переиспользуются группой 5
         # (relations FK) — без повторного полного обхода.
-        index_ids = set(IndexSnapshot(self._store, project_id).ids())
+        if isinstance(self._store, SqliteStoreLike):
+            index_ids = set(self._store.snapshot(project_id).ids())
+        else:
+            index_ids = set(IndexSnapshot(self._store, project_id).ids())
         index_ids.discard(project_id)  # проект — корневой контейнер
         knowledge_docs = list(self._repos.knowledge.list(project_id))
         repo_ids: set[str] = set()

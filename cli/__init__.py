@@ -25,6 +25,7 @@ from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
 from hkos.index import IndexCache, IndexEngine, IndexQueryExecutor, IndexStore
+from hkos.index.query_contract import IndexStoreLike
 from hkos.integration.hermes.doctor import HkosDoctor
 from hkos.repository.repository_manager import RepositoryManager
 from hkos.snapshot import SnapshotEngine
@@ -51,7 +52,14 @@ class CliContext:
             version=VersionManager())
         self.engine.initialize()
         self.repos = RepositoryManager(self.engine)
-        self.store = IndexStore(self.engine)
+        backend = str(cfg.get("hkos.index.backend", "json") or "json")
+        self.store: IndexStoreLike
+        if backend == "sqlite":
+            from hkos.index.sqlite_store import SqliteIndexStore
+
+            self.store = SqliteIndexStore(self.engine)
+        else:
+            self.store = IndexStore(self.engine)
         cache = IndexCache()
         self.index = IndexEngine(self.repos, self.store, HKOSLogger(),
                                  cache=cache)

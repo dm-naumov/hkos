@@ -35,6 +35,7 @@ from hkos.index.query_contract import (
     IndexQueryExecutor,
     IndexSnapshot,
     QueryContract,
+    SqliteStoreLike,
 )
 from hkos.index.relationship_index import (
     RelationshipIndex,
@@ -53,6 +54,7 @@ __all__ = [
     "IndexStore",
     "KeywordIndex",
     "QueryContract",
+    "SqliteStoreLike",
     "IndexQueryExecutor",
     "IndexCache",
     "IndexSnapshot",

@@ -52,6 +52,29 @@ def _relation_type_str(relation: Any) -> str:
     return str(value)
 
 
+def _rows_to_relations(rows: list[Any]) -> list[Any]:
+    """Строки rel -> KnowledgeRelation (JSON-семантика RelationshipIndex:
+    dedup по relation_id, стабильная сортировка по created_at)."""
+    from hkos.repository.knowledge_relations import KnowledgeRelation
+
+    seen: set[str] = set()
+    result: list[Any] = []
+    for row in rows:
+        record = {
+            "relation_id": row[0],
+            "source_id": row[1],
+            "target_id": row[2],
+            "relation_type": row[3],
+            "created_at": row[4],
+        }
+        if record["relation_id"] in seen:
+            continue
+        seen.add(record["relation_id"])
+        result.append(KnowledgeRelation.from_dict(record))
+    result.sort(key=lambda r: r.created_at)
+    return result
+
+
 class SqliteIndexStore:
     """Персистентность индексов проекта в SQLite (per-project, WAL)."""
 
@@ -67,11 +90,17 @@ class SqliteIndexStore:
         return Path(index_dir) / INDEX_STORE_DB
 
     def _connect(self, project: str) -> sqlite3.Connection:
-        """Открыть соединение (создаёт каталог и схему при необходимости)."""
+        """Открыть соединение (создаёт каталог и схему при необходимости).
+
+        WAL устанавливается только при создании файла (journal_mode=WAL
+        персистентен в заголовке БД) — повторные открытия без блокировок.
+        """
         db_path = self._db_path(project)
+        created = not db_path.exists()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         con = sqlite3.connect(str(db_path))
-        con.execute("PRAGMA journal_mode=WAL")
+        if created:
+            con.execute("PRAGMA journal_mode=WAL")
         con.execute("PRAGMA synchronous=NORMAL")
         self._init_schema(con)
         return con
@@ -559,3 +588,121 @@ class SqliteIndexStore:
     def storage(self) -> StorageEngine:
         """Используемый StorageEngine (как у IndexStore)."""
         return self._storage
+
+    # --- Query-слой (Q1-Q5 за интерфейсом IndexSnapshot, DS-017 §4.1.3) ---
+
+    def snapshot(self, project: str) -> "SqliteIndexSnapshot":
+        """Снапшот индексов проекта: Q1-Q5 исполняются SQL-запросами
+        (B-tree seek), без парсинга доков в память (capability для
+        IndexQueryExecutor)."""
+        return SqliteIndexSnapshot(self, project)
+
+class SqliteIndexSnapshot:
+    """Срез индексов проекта на SQLite (query-контракт IndexSnapshot).
+
+    Каждый Q-метод — SQL-запрос по соединению снапшота; данные всегда
+    актуальны (WAL), кэш разобранного снапшота не нужен (нет parse).
+    """
+
+    def __init__(self, store: SqliteIndexStore, project: str) -> None:
+        """Открыть соединение снапшота (закрывается при сборке)."""
+        self._store = store
+        self._project = project
+        self._con = store._connect(project)
+
+    # --- Q1 ---
+
+    def keyword_search(self, word: str) -> list[Any]:
+        """Q1: сущности по точному токену (exact, как JSON-бэкенд)."""
+        from hkos.index.query_contract import IndexEntry
+
+        rows = self._con.execute(
+            "SELECT id, type, project FROM kw WHERE word=? ORDER BY rowid",
+            (word,),
+        ).fetchall()
+        return [IndexEntry(id=r[0], type=r[1], project=r[2]) for r in rows]
+
+    # --- Q2 ---
+
+    def tag_search(self, tag: str) -> list[Any]:
+        """Q2: сущности по тегу."""
+        from hkos.index.query_contract import IndexEntry
+
+        rows = self._con.execute(
+            "SELECT id, type, project FROM tg WHERE tag=? ORDER BY rowid",
+            (tag,),
+        ).fetchall()
+        return [IndexEntry(id=r[0], type=r[1], project=r[2]) for r in rows]
+
+    # --- Q3 ---
+
+    def entity_get(self, entity_id: str) -> Any | None:
+        """Q3: метаданные сущности."""
+        from hkos.index.query_contract import EntityRecord
+
+        row = self._con.execute(
+            "SELECT id, project, type, title, status, category, tags_json,"
+            " updated_at FROM en WHERE id=?", (entity_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return EntityRecord(
+            id=row[0], project=row[1], type=row[2], title=row[3],
+            status=row[4], category=row[5],
+            tags=json.loads(row[6]), updated_at=row[7],
+        )
+
+    # --- Q4 ---
+
+    def relations_of_knowledge(
+        self, knowledge_id: str
+    ) -> list[Any]:
+        """Q4: все рёбра, где id — источник или цель (dedup, sort).
+
+        Порядок = JSON-семантике RelationshipIndex: out[id] + in[id],
+        dedup по relation_id, стабильная сортировка по created_at.
+        """
+        out = self._con.execute(
+            "SELECT relation_id, source_id, target_id, relation_type,"
+            " created_at FROM rel WHERE source_id=? ORDER BY rowid",
+            (knowledge_id,),
+        ).fetchall()
+        inn = self._con.execute(
+            "SELECT relation_id, source_id, target_id, relation_type,"
+            " created_at FROM rel WHERE target_id=? ORDER BY rowid",
+            (knowledge_id,),
+        ).fetchall()
+        return _rows_to_relations(out + inn)
+
+    def relations_of_project(self) -> list[Any]:
+        """Q4: все рёбра проекта (dedup по relation_id, stable sort)."""
+        rows = self._con.execute(
+            "SELECT relation_id, source_id, target_id, relation_type,"
+            " created_at FROM rel ORDER BY rowid",
+        ).fetchall()
+        return _rows_to_relations(rows)
+
+    # --- Q5 ---
+
+    def statistics(self) -> dict[str, int]:
+        """Q5: агрегированные счётчики проекта."""
+        statistics: dict[str, int] = {key: 0 for key in STAT_TYPES}
+        for row in self._con.execute("SELECT key, count FROM st"):
+            statistics[row[0]] = int(row[1])
+        return statistics
+
+    # --- Аддитивные методы (как IndexSnapshot) ---
+
+    def ids(self) -> list[str]:
+        """Все id проиндексированных сущностей (порядок вставки)."""
+        rows = self._con.execute(
+            "SELECT id FROM en ORDER BY rowid"
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def edge_count(self) -> int:
+        """Количество уникальных рёбер проекта."""
+        row = self._con.execute(
+            "SELECT COUNT(DISTINCT relation_id) FROM rel"
+        ).fetchone()
+        return int(row[0]) if row else 0

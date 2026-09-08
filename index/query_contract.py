@@ -18,11 +18,55 @@ Section 10-11).
 """
 
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol, runtime_checkable
+from typing import Any, Mapping, Protocol, runtime_checkable
 
 from hkos.index.entity_index import EntityIndex
 from hkos.index.index_cache import IndexCache
-from hkos.index.index_store import IndexStore
+
+
+class IndexStoreLike(Protocol):
+    """Индекс-бэкенд: JSON-файлы (IndexStore) или SQLite (SqliteIndexStore).
+
+    Структурный контракт Index Layer — оба официальных бэкенда (DS-017)
+    реализуют read/write/exists/delete/list_names/fingerprint; SqliteIndexStore
+    дополнительно предоставляет дельта-операции и capability snapshot.
+    """
+
+    def read(self, project: str, index_name: str) -> dict[str, object] | None: ...
+
+    def write(
+        self, project: str, index_name: str, doc: dict[str, object]
+    ) -> None: ...
+
+    def exists(self, project: str, index_name: str) -> bool: ...
+
+    def delete(self, project: str, index_name: str) -> None: ...
+
+    def list_names(self, project: str) -> list[str]: ...
+
+    def fingerprint(
+        self, project: str
+    ) -> tuple[tuple[str, int, int], ...]: ...
+
+
+@runtime_checkable
+class SqliteStoreLike(IndexStoreLike, Protocol):
+    """SQLite-бэкенд Index Layer (DS-017): дельта-операции и снапшот.
+
+    IndexUpdater/IndexQueryExecutor сужают store через isinstance —
+    JSON-бэкенд (без этих членов) остаётся полностью валиден.
+    """
+
+    def update_entity(
+        self, project: str, entity: Any, entity_type: str
+    ) -> None: ...
+
+    def remove_entity(
+        self, project: str, entity_id: str, entity_type: str
+    ) -> None: ...
+
+    def snapshot(self, project: str) -> Any: ...
+
 from hkos.index.keyword_index import KeywordIndex
 from hkos.index.relationship_index import RelationshipIndex
 from hkos.index.statistics_index import StatisticsIndex
@@ -132,11 +176,11 @@ class IndexSnapshot:
     запрос (производительность HKOS-INDEX-CONTRACT-001 §9).
     """
 
-    def __init__(self, store: IndexStore, project: str) -> None:
+    def __init__(self, store: IndexStoreLike, project: str) -> None:
         """Инициализация снимка (чтение 5 файлов индексов).
 
         Args:
-            store: IndexStore.
+            store: IndexStoreLike.
             project: UUID проекта.
 
         """
@@ -202,12 +246,12 @@ class IndexQueryExecutor:
     """
 
     def __init__(
-        self, store: IndexStore, cache: "IndexCache | None" = None
+        self, store: IndexStoreLike, cache: "IndexCache | None" = None
     ) -> None:
         """Инициализация исполнителя запросов.
 
         Args:
-            store: IndexStore — единственная точка доступа к файлам индексов.
+            store: IndexStoreLike — единственная точка доступа к файлам индексов.
             cache: Внутренний кэш Index Layer (опционально; DS-013).
                 Должен быть тем же экземпляром, что и у IndexEngine
                 (инвалидация при update/rebuild).
@@ -216,18 +260,22 @@ class IndexQueryExecutor:
         self._store = store
         self._cache = cache
 
-    def snapshot(self, project: str) -> IndexSnapshot:
+    def snapshot(self, project: str) -> IndexSnapshot | Any:
         """Снимок индексов проекта на один запрос (сессия чтения).
 
-        С кэшем: повторные запросы без повторного parse файлов.
+        JSON-бэкенд: кэш + parse 5 доков. SQLite-бэкенд (store имеет
+        capability snapshot): снапшот без parse — Q исполняются SQL;
+        кэш не нужен (данные актуальны всегда).
         """
+        if isinstance(self._store, SqliteStoreLike):
+            return self._store.snapshot(project)
         cache = self._cache
         if cache is None:
             return IndexSnapshot(self._store, project)
         fingerprint = self._store.fingerprint(project)
         cached = cache.get(project, fingerprint)
         if cached is not None:
-            return cached  # type: ignore[return-value]  # object -> IndexSnapshot
+            return cached
         snapshot = IndexSnapshot(self._store, project)
         cache.set(project, snapshot, fingerprint)
         return snapshot

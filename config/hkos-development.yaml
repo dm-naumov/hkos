@@ -6,6 +6,9 @@ hkos:
   version: "1.1.0"
   root: ./hkos
   enabled: true
+  # Индексный бэкенд: json (default, человекочитаемый) | sqlite (дельта, DS-017)
+  index:
+    backend: json
 
 core:
   bootstrap:

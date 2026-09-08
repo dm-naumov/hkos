@@ -15,7 +15,7 @@ import re
 from typing import TypeAlias
 
 from hkos.index.entity_index import EntityIndex
-from hkos.index.index_store import IndexStore
+from hkos.index.query_contract import IndexStoreLike
 from hkos.index.keyword_index import KeywordIndex
 from hkos.index.relationship_index import RelationshipIndex
 from hkos.index.statistics_index import StatisticsIndex
@@ -52,13 +52,13 @@ class IndexValidator:
     """Валидация индексов проекта (только чтение)."""
 
     def __init__(
-        self, repositories: RepositoryManager, store: IndexStore
+        self, repositories: RepositoryManager, store: IndexStoreLike
     ) -> None:
         """Инициализация валидатора.
 
         Args:
             repositories: RepositoryManager — проверка существования сущностей.
-            store: IndexStore — чтение файлов индексов.
+            store: IndexStoreLike — чтение файлов индексов.
 
         """
         self._repositories = repositories

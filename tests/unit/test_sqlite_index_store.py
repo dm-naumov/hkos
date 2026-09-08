@@ -10,14 +10,21 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
-from hkos.index import IndexCache, IndexEngine, IndexStore
+from hkos.index import (
+    IndexCache,
+    IndexEngine,
+    IndexQueryExecutor,
+    IndexStore,
+)
 from hkos.index.sqlite_store import INDEX_STORE_DB, SqliteIndexStore
 from hkos.repository.models import Knowledge
 from hkos.repository.repository_manager import RepositoryManager
+from hkos.retrieval import RetrievalEngine
 from hkos.services.librarian import Librarian
 from hkos.services.project_manager import ProjectManager
 from hkos.storage import StorageEngine
@@ -276,3 +283,129 @@ def _assert_all_equal(ctx: SqliteContext, pid: str) -> None:
         json_data = ctx.json_data(pid, name)
         assert json_data is not None, name
         assert ctx.sqlite_data(pid, name) == json_data, name
+
+
+class TestSqliteQueryLayer:
+    """ЭТАП 2: Q1-Q5 исполняются SQL (снапшот-паритет) + горячий путь.
+
+    SqliteIndexSnapshot повторяет контракт IndexSnapshot; RetrievalEngine
+    через IndexQueryExecutor не знает, какой бэкенд под ним.
+    """
+
+    def test_query_snapshot_matches_json(self, tmp_path: Path) -> None:
+        """Q1-Q5 sqlite == JSON на одном корпусе (снапшот-паритет)."""
+        ctx = SqliteContext(tmp_path)
+        pid = ctx.build_corpus()
+        for name in _INDEX_NAMES:
+            ctx.mirror(pid, name, ctx.json_data(pid, name) or {})
+        json_qc = IndexQueryExecutor(ctx.json_store)
+        sqlite_qc = IndexQueryExecutor(ctx.sqlite_store)
+        js = json_qc.snapshot(pid)
+        ss = sqlite_qc.snapshot(pid)
+
+        # Q1: keyword_search
+        assert ss.keyword_search("udp") == js.keyword_search("udp")
+        assert ss.keyword_search("mtu") == js.keyword_search("mtu")
+        assert ss.keyword_search("absent-word") == []
+        # Q2: tag_search
+        assert ss.tag_search("tproxy") == js.tag_search("tproxy")
+        # Q3: entity_get
+        for eid in js.ids():
+            assert ss.entity_get(eid) == js.entity_get(eid)
+        assert ss.entity_get("no-such-id") is None
+        # Q4: relations (merge создал рёбра). Порядок при РАВНЫХ created_at —
+        # в JSON артефакт истории построения out (не контракт); детерминизм
+        # контракта — сортировка по created_at. Сравниваем канонически.
+        def canon(rels: list[Any]) -> list[dict[str, str]]:
+            return sorted(
+                (r.to_dict() for r in rels),
+                key=lambda d: (d["created_at"], d["relation_id"]),
+            )
+
+        for eid in js.ids():
+            assert canon(ss.relations_of_knowledge(eid)) == canon(
+                js.relations_of_knowledge(eid)
+            ), eid
+        assert canon(ss.relations_of_project()) == canon(
+            js.relations_of_project()
+        )
+        # Q5: statistics + ids
+        assert ss.statistics() == js.statistics()
+        assert ss.ids() == js.ids()
+
+    def test_hot_path_sqlite_backend_retrieval(
+        self, tmp_path: Path
+    ) -> None:
+        """Горячий путь на sqlite: register -> delta update -> retrieve."""
+        cfg = ConfigLoader(profile="development")
+        cfg.load()
+        engine = StorageEngine(
+            root=str(tmp_path), config=cfg, logger=HKOSLogger(),
+            version=VersionManager())
+        engine.initialize()
+        repos = RepositoryManager(engine)
+        projects = ProjectManager(repos, HKOSLogger())
+        librarian = Librarian(repos, HKOSLogger())
+        sqlite_store = SqliteIndexStore(engine)
+        index = IndexEngine(repos, sqlite_store, HKOSLogger())
+        qc = IndexQueryExecutor(sqlite_store)
+        retrieval = RetrievalEngine(repos, qc, cfg, HKOSLogger())
+
+        pid = projects.create(name="P1", tags=["demo"]).id
+        titles: list[str] = []
+        for title, body, tags in [
+            ("UDP bypasses proxy", "cause tproxy rule missing",
+             ["udp", "proxy"]),
+            ("tproxy rule fixes udp", "fix routing table",
+             ["udp", "tproxy"]),
+            ("mtu breakage", "udp dies above 1400",
+             ["mtu", "udp"]),
+        ]:
+            k = librarian.register(
+                pid, Knowledge(title=title, body=body, tags=tags))
+            index.update(pid, k.id, "knowledge")
+            titles.append(title)
+
+        result = retrieval.retrieve("udp", project_id=pid, top_n=10)
+        got = sorted(item.entity.title for item in result.items)
+        assert got == sorted(titles), f"hot path misses knowledge: {got}"
+        snap = qc.snapshot(pid)
+        assert sorted(snap.ids()) == sorted(
+            item.entity.id for item in result.items)
+        assert snap.statistics()["knowledge"] == len(titles)
+
+    def test_hot_path_update_is_delta(self, tmp_path: Path) -> None:
+        """update через IndexEngine (sqlite) не переписывает корпус."""
+        ctx = SqliteContext(tmp_path)
+        pid = ctx.build_corpus()
+        for name in _INDEX_NAMES:
+            ctx.mirror(pid, name, ctx.json_data(pid, name) or {})
+        sqlite_index = IndexEngine(
+            ctx.repos, ctx.sqlite_store, HKOSLogger())
+        kw_before = ctx.sqlite_store.read(pid, "keyword")
+        assert kw_before is not None
+        postings_before = kw_before["postings"]
+        assert isinstance(postings_before, dict)
+        rows_before = sum(len(v) for v in postings_before.values())
+
+        k = ctx.librarian.register(
+            pid, Knowledge(
+                title="new knowledge entry", body="fresh body words",
+                tags=["fresh"]))
+        sqlite_index.update(pid, k.id, "knowledge")
+        kw_after = ctx.sqlite_store.read(pid, "keyword")
+        assert kw_after is not None
+        postings_after = kw_after["postings"]
+        assert isinstance(postings_after, dict)
+        rows_after = sum(len(v) for v in postings_after.values())
+        # дельта: добавились только слова новой сущности (не перезапись)
+        assert rows_after > rows_before
+        assert len(postings_after) - len(postings_before) < 10
+        # удаление дельтой
+        sqlite_index.remove(pid, k.id, "knowledge")
+        kw_final = ctx.sqlite_store.read(pid, "keyword")
+        assert kw_final is not None
+        postings_final = kw_final["postings"]
+        assert isinstance(postings_final, dict)
+        rows_final = sum(len(v) for v in postings_final.values())
+        assert rows_final == rows_before

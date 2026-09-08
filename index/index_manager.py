@@ -12,7 +12,7 @@ IndexManager реализует RelationshipReader (Architectural Freeze,
 from hkos.index.entity_index import EntityIndex
 from hkos.index.exceptions import IndexNotFoundError
 from hkos.index.index_builder import IndexBuilder, _index_doc
-from hkos.index.index_store import IndexStore
+from hkos.index.query_contract import IndexStoreLike
 from hkos.index.index_updater import IndexUpdater
 from hkos.index.index_validator import IndexValidator
 from hkos.index.keyword_index import KeywordIndex
@@ -37,7 +37,7 @@ class IndexManager:
     def __init__(
         self,
         repositories: RepositoryManager,
-        store: IndexStore,
+        store: IndexStoreLike,
         builder: IndexBuilder | None = None,
         updater: IndexUpdater | None = None,
         validator: IndexValidator | None = None,
@@ -46,7 +46,7 @@ class IndexManager:
 
         Args:
             repositories: RepositoryManager — чтение сущностей.
-            store: IndexStore — персистентность индексов.
+            store: IndexStoreLike — персистентность индексов.
             builder/updater/validator: компоненты; создаются по умолчанию.
 
         """
@@ -63,7 +63,7 @@ class IndexManager:
         )
 
     @property
-    def store(self) -> IndexStore:
+    def store(self) -> IndexStoreLike:
         """Используемый IndexStore."""
         return self._store
 

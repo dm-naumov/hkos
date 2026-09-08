@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
+from hkos.index.query_contract import IndexStoreLike
 from hkos.index import IndexCache, IndexEngine, IndexQueryExecutor, IndexStore
 from hkos.integration.hermes.doctor import HkosDoctor
 from hkos.mcp_server.persistence import FileSnapshotPersistence
@@ -55,7 +56,14 @@ def build_context(data_root: str, profile: str) -> McpContext:
     projects = ProjectManager(repos, HKOSLogger())
     campaigns = CampaignManager(repos, HKOSLogger())
     librarian = Librarian(repos, HKOSLogger())
-    store = IndexStore(engine)
+    backend = str(cfg.get("hkos.index.backend", "json") or "json")
+    store: IndexStoreLike
+    if backend == "sqlite":
+        from hkos.index.sqlite_store import SqliteIndexStore
+
+        store = SqliteIndexStore(engine)
+    else:
+        store = IndexStore(engine)
     cache = IndexCache()
     index = IndexEngine(repos, store, HKOSLogger(), cache=cache)
     qc = IndexQueryExecutor(store, cache=cache)

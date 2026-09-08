@@ -16,7 +16,7 @@ Retriever (DS-008) сможет использовать индекс без и�
 from hkos.core.logger import HKOSLogger
 from hkos.index.index_cache import IndexCache
 from hkos.index.index_manager import IndexManager
-from hkos.index.index_store import IndexStore
+from hkos.index.query_contract import IndexStoreLike
 from hkos.index.validation import ValidationResult
 from hkos.repository.knowledge_relations import KnowledgeRelation
 from hkos.repository.repository_manager import RepositoryManager
@@ -45,7 +45,7 @@ class IndexEngine:
     def __init__(
         self,
         repositories: RepositoryManager,
-        store: IndexStore,
+        store: IndexStoreLike,
         logger: HKOSLogger,
         manager: IndexManager | None = None,
         cache: "IndexCache | None" = None,
@@ -54,7 +54,7 @@ class IndexEngine:
 
         Args:
             repositories: RepositoryManager — чтение сущностей.
-            store: IndexStore — персистентность файлов индексов.
+            store: IndexStoreLike — персистентность файлов индексов.
             logger: HKOSLogger — системное журналирование.
             manager: IndexManager; создаётся по умолчанию.
             cache: Внутренний кэш Index Layer (DS-013 ЭТАП 3);
@@ -75,7 +75,7 @@ class IndexEngine:
         return self._manager
 
     @property
-    def store(self) -> IndexStore:
+    def store(self) -> IndexStoreLike:
         """IndexStore (персистентность индексов)."""
         return self._store
 
