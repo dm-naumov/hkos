@@ -3,7 +3,7 @@
 # Version: 1.0.0
 
 hkos:
-  version: "1.0.1"
+  version: "1.1.0"
   root: ./hkos
   enabled: true
 
@@ -43,6 +43,9 @@ retrieval:
     success_weight: 0.05
     campaign_weight: 0.05
     decision_weight: 0.05
+    # IP-017 ЭТАП 7 (Failure Priority): прошлые сбои (kind=negative / категория
+    # FAILURE) выходят выше среди равных кандидатов; вес не перебивает topic.
+    failure_weight: 0.05
     freshness_half_life_days: 90
     # Верхние границы нормализации факторов (0 — фактор выключен;
     # текущее поведение: usage/references/confirmations выключены,

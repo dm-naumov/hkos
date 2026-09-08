@@ -31,6 +31,10 @@ class RelationType(str, Enum):
     CONFLICTS_WITH = "CONFLICTS_WITH"
     CANONICAL_OF = "CANONICAL_OF"
     DERIVED_FROM = "DERIVED_FROM"
+    # Инженерная семантика (DS-017 §4.2.2): трассируемость ФАКТ -> РЕШЕНИЕ -> СБОЙ
+    BASED_ON = "BASED_ON"
+    CAUSED_BY = "CAUSED_BY"
+    MITIGATED_BY = "MITIGATED_BY"
     REFERENCE_TO = "REFERENCE_TO"
 
 
@@ -51,6 +55,9 @@ class KnowledgeRelation:
     target_id: str = ""
     relation_type: RelationType = RelationType.REFERENCE_TO
     created_at: str = ""
+    # DS-017 §4.2.3 (additive): "" = связь внутри проекта; непустое значение —
+    # кросс-проектное ребро (цель в другом проекте). Использование — v1.2.
+    target_project_id: str = ""
 
     def to_dict(self) -> dict[str, object]:
         """Отношение как словарь (сериализация)."""
@@ -60,6 +67,7 @@ class KnowledgeRelation:
             "target_id": self.target_id,
             "relation_type": self.relation_type.value,
             "created_at": self.created_at,
+            "target_project_id": self.target_project_id,
         }
 
     @classmethod
@@ -72,12 +80,16 @@ class KnowledgeRelation:
                 relation_type = RelationType(raw_type)
             except ValueError:
                 relation_type = RelationType.REFERENCE_TO
+        raw_project = data.get("target_project_id", "")
         return cls(
             relation_id=str(data.get("relation_id", "")),
             source_id=str(data.get("source_id", "")),
             target_id=str(data.get("target_id", "")),
             relation_type=relation_type,
             created_at=str(data.get("created_at", "")),
+            target_project_id=(
+                str(raw_project) if isinstance(raw_project, str) else ""
+            ),
         )
 
 

@@ -37,7 +37,16 @@
 
 - ProjectManager: create/info/list/update/close/archive/...
 - CampaignManager: create/open/pause/resume/close/status (FSM CREATED→…→COMPLETED)
-- Librarian: register/update/canonicalize/archive/restore/reject/validate
+- Librarian: register/update/canonicalize/merge/archive/restore/reject/
+  detect_conflicts/recalculate_confidence/history/validate/
+  validate_relations/explain_category
+- KnowledgeClassifier: classify(knowledge); classify_with_rule(knowledge) →
+  (category, rule_id). Детерминированная классификация (DS-017 §4.3.1):
+  kind='negative' → FAILURE; маркеры title/body → категория; иначе FACT.
+  register игнорирует предзаполненный knowledge.category (hint) — финальная
+  категория всегда от классификатора, если не передан явный параметр
+  category; explain_category возвращает решение с id правила для
+  прозрачности (warnings в MCP save).
 - MemoryService: resolve_project/resolve_campaign/prepare_context/save_results/drain_pending
 
 ## Migration (DS-011)

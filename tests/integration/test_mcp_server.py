@@ -104,7 +104,7 @@ class TestMcpServerProtocol:
             assert init is not None and "result" in init
             info = init["result"]["serverInfo"]
             assert info["name"] == "hkos-mcp"
-            assert info["version"] == "1.0.1"
+            assert info["version"] == "1.1.0"
             assert "tools" in init["result"]["capabilities"]
 
             client.send("notifications/initialized", {}, notify=True)
@@ -123,7 +123,7 @@ class TestMcpServerProtocol:
             status, is_error = client.call("status", {})
             assert not is_error
             assert status["ready"] is True
-            assert status["version"] == "1.0.1"
+            assert status["version"] == "1.1.0"
             assert status["projects"] == 0
             assert status["knowledge_total"] == 0
         finally:
@@ -181,6 +181,88 @@ class TestMcpServerProtocol:
             assert not is_error
             assert ctx["item_count"] >= 1
             assert "estimates" in ctx and "sections" in ctx
+        finally:
+            client.close()
+
+    def test_save_with_relations_warnings(self, tmp_path: Path) -> None:
+        client = McpClient(tmp_path)
+        try:
+            # Сохранение без relations — обратная совместимость (warnings=[])
+            plain, is_error = client.call("save", {
+                "project": "Rel", "title": "plain fact udp",
+            })
+            assert not is_error
+            assert plain["warnings"] == []
+
+            # Цель для валидной ссылки
+            target, is_error = client.call("save", {
+                "project": "Rel", "title": "target fact udp",
+            })
+            assert not is_error
+            target_id = target["id"]
+
+            # 1 валидная + 3 невалидные ссылки: save проходит, причины в warnings
+            result, is_error = client.call("save", {
+                "project": "Rel",
+                "title": "source fact udp",
+                "relations": [
+                    {"target_id": target_id,
+                     "relation_type": "BASED_ON"},
+                    {"target_id": "bogus-target-id",
+                     "relation_type": "CAUSED_BY"},
+                    {"target_id": target_id,
+                     "relation_type": "TELEPORT"},
+                    {"relation_type": "BASED_ON"},
+                ],
+            })
+            assert not is_error
+            assert isinstance(result["warnings"], list)
+            assert len(result["warnings"]) == 3
+            joined = " | ".join(result["warnings"])
+            assert "unknown relation_type 'TELEPORT'" in joined
+            assert "missing target_id" in joined
+            assert "bogus-target-id" in joined and "target not found" in joined
+            # Валидная ссылка не породила warning
+            assert target_id not in joined
+        finally:
+            client.close()
+
+    def test_save_category_override_warnings(self, tmp_path: Path) -> None:
+        client = McpClient(tmp_path)
+        try:
+            # kind=negative + подсказка SUCCESS -> FAILURE (rule:kind:negative)
+            saved, is_error = client.call("save", {
+                "project": "Cat",
+                "title": "something broke udp",
+                "category": "SUCCESS",
+                "kind": "negative",
+            })
+            assert not is_error
+            assert saved["category"] == "FAILURE"
+            joined = " | ".join(saved["warnings"])
+            assert "category overridden" in joined
+            assert "SUCCESS" in joined and "FAILURE" in joined
+            assert "rule:kind:negative" in joined
+
+            # Невалидная подсказка -> warning, save проходит
+            bogus, is_error = client.call("save", {
+                "project": "Cat", "title": "plain fact udp",
+                "category": "BOGUS",
+            })
+            assert not is_error
+            assert bogus["category"] == "FACT"
+            bogus_joined = " | ".join(bogus["warnings"])
+            assert "not a valid category" in bogus_joined
+            assert "rule:default:fact" in bogus_joined
+
+            # Совпадающая подсказка -> без category-warning
+            match, is_error = client.call("save", {
+                "project": "Cat", "title": "plain fact udp",
+                "category": "FACT",
+            })
+            assert not is_error
+            assert match["category"] == "FACT"
+            assert match["warnings"] == []
         finally:
             client.close()
 

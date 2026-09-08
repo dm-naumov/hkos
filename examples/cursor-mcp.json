@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.khulnasoft.com/mcp/0.1.0",
+  "mcpServers": {
+    "hkos": {
+      "command": "uvx",
+      "args": ["hkos-mcp"],
+      "env": {
+        "HKOS_DATA_ROOT": "/absolute/path/to/your/hkos-data-root"
+      }
+    }
+  }
+}

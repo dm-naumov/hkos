@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hkos"
-version = "1.0.1"
+version = "1.1.0"
 description = "Deterministic, file-based engineering knowledge base for LLM agents (SSOT, retrieval, snapshots, migrations)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -59,7 +59,8 @@ package-dir = { "hkos" = "." }
 # Layers only. docs/, scripts/, tests/, Reports/ and the hkos/ data root are
 # intentionally excluded from the published package.
 packages = [
-    "hkos", "hkos.api", "hkos.campaign", "hkos.config", "hkos.context",
+    "hkos", "hkos.api", "hkos.campaign", "hkos.cli", "hkos.config",
+    "hkos.context",
     "hkos.core", "hkos.index", "hkos.integration", "hkos.integration.hermes",
     "hkos.kernel", "hkos.knowledge", "hkos.librarian", "hkos.migration",
     "hkos.performance", "hkos.project", "hkos.repository", "hkos.retrieval",
@@ -69,6 +70,7 @@ packages = [
 
 [project.scripts]
 hkos-mcp = "hkos.mcp_server.server:main"
+hkos = "hkos.cli:main"
 
 [tool.setuptools.package-data]
 "hkos.config" = ["*.yaml"]

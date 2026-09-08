@@ -29,6 +29,9 @@ __all__ = [
     "CATEGORY_CONFIGURATION",
     "CATEGORY_REFERENCE",
     "VALID_CATEGORIES",
+    "RULE_KIND_NEGATIVE",
+    "RULE_MARKER_PREFIX",
+    "RULE_DEFAULT_FACT",
     "KnowledgeClassifier",
 ]
 
@@ -70,6 +73,12 @@ _CATEGORY_MARKERS: Final[list[tuple[str, tuple[str, ...]]]] = [
     (CATEGORY_REFERENCE, ("ссылка", "reference", "документация", "см.")),
 ]
 
+# Id правил классификации (DS-017 §4.3.1): стабильные, машиночитаемые;
+# возвращаются в warnings API/MCP при переопределении категории.
+RULE_KIND_NEGATIVE: Final[str] = "rule:kind:negative"
+RULE_MARKER_PREFIX: Final[str] = "rule:marker:"
+RULE_DEFAULT_FACT: Final[str] = "rule:default:fact"
+
 
 class KnowledgeClassifier:
     """Классификатор категорий Knowledge (детерминированный)."""
@@ -83,15 +92,33 @@ class KnowledgeClassifier:
 
         Returns:
             Категория из VALID_CATEGORIES.
+
+        Обратная совместимость: тонкая обёртка над classify_with_rule.
+        """
+        category, _ = KnowledgeClassifier.classify_with_rule(knowledge)
+        return category
+
+    @staticmethod
+    def classify_with_rule(knowledge: Knowledge) -> tuple[str, str]:
+        """Определить категорию и вернуть id сработавшего правила.
+
+        Args:
+            knowledge: Знание (title/body/kind анализируются).
+
+        Returns:
+            (категория, rule id) — детерминированно (DS-017 §4.3.1):
+            - kind='negative' -> (FAILURE, RULE_KIND_NEGATIVE);
+            - маркер в title/body -> (категория, RULE_MARKER_PREFIX + категория);
+            - иначе -> (FACT, RULE_DEFAULT_FACT).
         """
         if knowledge.kind == "negative":
-            return CATEGORY_FAILURE
+            return CATEGORY_FAILURE, RULE_KIND_NEGATIVE
         text = f"{knowledge.title}\n{knowledge.body}".lower()
         for category, markers in _CATEGORY_MARKERS:
             for marker in markers:
                 if marker in text:
-                    return category
-        return CATEGORY_FACT
+                    return category, f"{RULE_MARKER_PREFIX}{category}"
+        return CATEGORY_FACT, RULE_DEFAULT_FACT
 
     @staticmethod
     def is_valid(category: str) -> bool:

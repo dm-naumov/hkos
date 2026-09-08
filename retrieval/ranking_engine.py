@@ -6,7 +6,9 @@
 В коде НЕТ захардкоженных коэффициентов (проверяется архитектурным тестом).
 
 Факторы (IP-008): Topic, Confidence, Project, Freshness, Usage,
-Canonical, References, Success Count, Campaign Match, Decision Priority.
+Canonical, References, Success Count, Campaign Match, Decision Priority,
+Failure Priority (IP-017 ЭТАП 7: knowledge kind=negative/category FAILURE
+выше среди равных; вес retrieval.ranking.failure_weight).
 
 Каждый фактор нормализован в [0, 1]; итоговый Score = sum(weight * factor) * 100.
 
@@ -128,6 +130,22 @@ class RankingEngine:
             parts.append(str(tag).lower())
         return " ".join(parts)
 
+    @staticmethod
+    def _is_failure(entity: Any, entity_type: str) -> bool:
+        """Прошлый сбой: knowledge c kind='negative' или категорией FAILURE.
+
+        Только knowledge (как decision-фактор — только для decision).
+        В index-only фазе kind недоступен (Q3), проверяется категория:
+        register всегда классифицирует kind='negative' в FAILURE
+        (KnowledgeClassifier), поэтому эквивалентно.
+        """
+        if entity_type != "knowledge":
+            return False
+        return (
+            getattr(entity, "kind", "") == "negative"
+            or getattr(entity, "category", "") == "FAILURE"
+        )
+
     def _topic_factor(self, entity: Any, topic: str) -> float:
         """Совпадение темы (текст сущности)."""
         if not topic:
@@ -178,6 +196,7 @@ class RankingEngine:
             "success": self._normalized(entity.confirmations, "confirmations"),
             "campaign": 1 if (campaign_id and entity.source_campaign == campaign_id) else 0,
             "decision": 1 if entity_type == "decision" else 0,
+            "failure": 1 if self._is_failure(entity, entity_type) else 0,
         }
         score = sum(
             self._weights.get(name, 0) * value
@@ -316,6 +335,9 @@ class RankingEngine:
             "freshness": self._freshness_factor(entity.updated_at),
             "canonical": 1 if KnowledgeStatus.is_canonical(entity) else 0,
             "decision": 1 if candidate.entity_type == "decision" else 0,
+            "failure": (
+                1 if self._is_failure(entity, candidate.entity_type) else 0
+            ),
         }
         score = sum(
             self._weights.get(name, 0) * value

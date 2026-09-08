@@ -7,7 +7,9 @@ Repository (SSOT) == Index (проекция) == Snapshot (состояние).
 - campaign consistency:  repository_campaigns == index_campaigns;
 - knowledge consistency: repository_knowledge == index_knowledge;
 - snapshot consistency:  snapshot counters == repository counters (все типы);
-- orphans:               index entity без repository / repository entity без индекса.
+- orphans:               index entity без repository / repository entity без индекса;
+- relations FK:          висячие ссылки relations (SSOT): цель ребра не
+                         существует в целевом проекте (в т.ч. кросс-проектно).
 
 CLI: python3 scripts/doctor_cli.py --project <id|name>
 """
@@ -116,8 +118,53 @@ class HkosDoctor:
             detail="Index projection desync (incident 001 family); "
                    "fix: index.update/rebuild")
 
+    def _dangling_relations(
+        self,
+        project_id: str,
+        knowledge_docs: list[Any],
+        project_repo_ids: set[str],
+    ) -> list[str]:
+        """Висячие ссылки relations по SSOT (DS-017 ЭТАП 3).
+
+        Рёбра хранятся на Knowledge-документах; цель проверяется в целевом
+        проекте (target_project_id or project_id) среди knowledge/decision/
+        artifact/campaign. Множества id чужого проекта строятся по требованию
+        (только если на проект есть ссылки); отсутствующий каталог трактуется
+        как пустой (граница слоёв: repository-исключения не импортируются).
+        """
+        known: dict[str, set[str]] = {project_id: project_repo_ids}
+        dangling: list[str] = []
+        for doc in knowledge_docs:
+            for rel in doc.relations:
+                target_project = rel.target_project_id or project_id
+                ids = known.get(target_project)
+                if ids is None:
+                    ids = self._project_entity_ids(target_project)
+                    known[target_project] = ids
+                if rel.target_id not in ids:
+                    dangling.append(
+                        f"{doc.id} -> {rel.relation_type.value}:"
+                        f"{rel.target_id}@{target_project}")
+        return dangling
+
+    def _project_entity_ids(self, project_id: str) -> set[str]:
+        """Id всех сущностей проекта (4 содержательных типа)."""
+        ids: set[str] = set()
+        for repo in (
+            self._repos.knowledge,
+            self._repos.decisions,
+            self._repos.artifacts,
+            self._repos.campaigns,
+        ):
+            try:
+                ids.update(entity.id for entity in repo.list(project_id))
+            except Exception:
+                # отсутствующий/чужой каталог проекта — сущностей нет
+                continue
+        return ids
+
     def check(self, project_id: str) -> ConsistencyReport:
-        """Полная проверка проекта (4 группы проверок)."""
+        """Полная проверка проекта (5 групп проверок)."""
         report = ConsistencyReport(project_id=project_id)
 
         # 1) Campaign consistency: repository == index
@@ -162,16 +209,19 @@ class HkosDoctor:
         # 4) Orphans: index без repository / repository без индекса.
         # Проект исключён: корневой контейнер индексируется лениво (build/rebuild)
         # и не может «потеряться»; orphans считаются по содержательным типам.
+        # knowledge_docs материализуются ОДИН раз и переиспользуются группой 5
+        # (relations FK) — без повторного полного обхода.
         index_ids = set(IndexSnapshot(self._store, project_id).ids())
         index_ids.discard(project_id)  # проект — корневой контейнер
+        knowledge_docs = list(self._repos.knowledge.list(project_id))
         repo_ids: set[str] = set()
         for repo in (
-            self._repos.knowledge,
             self._repos.decisions,
             self._repos.artifacts,
             self._repos.campaigns,
         ):
             repo_ids.update(entity.id for entity in repo.list(project_id))
+        repo_ids.update(entity.id for entity in knowledge_docs)
         index_without_repo = index_ids - repo_ids
         repo_without_index = repo_ids - index_ids
         if index_without_repo:
@@ -192,5 +242,19 @@ class HkosDoctor:
             report.issues.append(ConsistencyIssue(
                 check="orphans: repository entity without index",
                 status="PASS", expected=0, actual=0))
+
+        # 5) Relations FK integrity (DS-017 ЭТАП 3): висячие ссылки.
+        # Рёбра хранятся на Knowledge (SSOT); doctor флагает, не чинит.
+        dangling = self._dangling_relations(
+            project_id, knowledge_docs, repo_ids)
+        if dangling:
+            report.issues.append(ConsistencyIssue(
+                check="relations FK: dangling links", status="FAIL",
+                expected=0, actual=len(dangling),
+                detail="; ".join(dangling[:3])))
+        else:
+            report.issues.append(ConsistencyIssue(
+                check="relations FK: dangling links", status="PASS",
+                expected=0, actual=0))
 
         return report

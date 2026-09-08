@@ -17,6 +17,7 @@ import uuid
 from hkos.core.logger import HKOSLogger
 from hkos.repository.exceptions import RepositoryNotFoundError
 from hkos.repository.knowledge_repository import KnowledgeRepository
+from hkos.repository.knowledge_relations import KnowledgeRelation
 from hkos.repository.models import Knowledge, KnowledgeHistoryEntry
 from hkos.repository.repository_manager import RepositoryManager
 from hkos.services.librarian.confidence_engine import ConfidenceEngine
@@ -57,7 +58,8 @@ class Librarian:
 
     Публичный API (ровно эти методы):
         register, update, canonicalize, merge, archive, restore, reject,
-        detect_conflicts, recalculate_confidence, history, validate
+        detect_conflicts, recalculate_confidence, history, validate,
+        validate_relations, explain_category
     """
 
     def __init__(
@@ -104,6 +106,113 @@ class Librarian:
 
     # --- Публичный API ---
 
+    def validate_relations(
+        self,
+        project_id: str,
+        source_id: str,
+        relations: list[KnowledgeRelation],
+    ) -> tuple[list[KnowledgeRelation], list[str]]:
+        """Проверить входящие рёбра Knowledge (DS-017 §4.2.1).
+
+        Возвращает (валидные рёбра, причины отклонения). Исключений не
+        поднимает: используется write-path'ом (строгий отказ через вызов)
+        и MCP-слоем (превращение причин в warnings ответа).
+
+        Правила (детерминированные):
+        - эффективный проект цели = target_project_id or project_id;
+        - явный target_project_id: проект должен существовать;
+        - цель должна существовать в целевом проекте (knowledge → decisions
+          → artifacts → campaigns);
+        - self-loop (target == source в том же проекте) отклоняется.
+        """
+        if not relations:
+            return [], []
+        valid: list[KnowledgeRelation] = []
+        warnings: list[str] = []
+        for relation in relations:
+            reason = self._relation_issue(project_id, source_id, relation)
+            if reason is not None:
+                warnings.append(reason)
+                continue
+            valid.append(relation)
+        return valid, warnings
+
+    def _relation_issue(
+        self,
+        project_id: str,
+        source_id: str,
+        relation: KnowledgeRelation,
+    ) -> str | None:
+        """Причина отклонения ребра; None — ребро валидно."""
+        target_project = relation.target_project_id or project_id
+        if relation.target_project_id:
+            try:
+                self._repositories.projects.load(relation.target_project_id)
+            except RepositoryNotFoundError:
+                return (
+                    f"relation target {relation.target_id}: target project "
+                    f"not found: {relation.target_project_id}"
+                )
+        if (
+            relation.target_id == source_id
+            and target_project == project_id
+        ):
+            return (
+                f"relation target {relation.target_id}: self-loop is not "
+                f"allowed (knowledge cannot reference itself)"
+            )
+        if not self._target_exists(target_project, relation.target_id):
+            return (
+                f"relation target {relation.target_id}: target not found "
+                f"in project {target_project}"
+            )
+        return None
+
+    def _target_exists(self, project_id: str, entity_id: str) -> bool:
+        """Существует ли сущность-цель среди допустимых типов."""
+        for repo in (
+            self._repositories.knowledge,
+            self._repositories.decisions,
+            self._repositories.artifacts,
+            self._repositories.campaigns,
+        ):
+            try:
+                repo.load(project_id, entity_id)
+                return True
+            except RepositoryNotFoundError:
+                continue
+        return False
+
+    def _validate_incoming_relations(
+        self, project_id: str, knowledge: Knowledge
+    ) -> None:
+        """Строгая проверка relations перед persist (write-path целостность).
+
+        Невалидные рёбра не персистятся молча: register/update поднимают
+        LibrarianError со списком причин (DS-017 §4.2.1). Мягкий путь с
+        warnings предоставляет validate_relations для MCP/API-слоя.
+        """
+        if not knowledge.relations:
+            return
+        valid, issues = self.validate_relations(
+            project_id, knowledge.id, knowledge.relations
+        )
+        if issues:
+            raise LibrarianError("Invalid relations: " + "; ".join(issues))
+        knowledge.relations = valid
+
+    def explain_category(self, knowledge: Knowledge) -> tuple[str, str]:
+        """Категория и id правила — как их определит register (DS-017 §4.3.1).
+
+        Для ещё не сохранённого Knowledge; используется API/MCP для
+        прозрачности: при переопределении предложенной агентом категории
+        возвращается причина (rule id), а не молчаливая подмена.
+
+        Returns:
+            (категория из VALID_CATEGORIES, стабильный id правила).
+        """
+        return KnowledgeClassifier.classify_with_rule(knowledge)
+
     def register(
         self,
         project_id: str,
@@ -125,7 +234,15 @@ class Librarian:
             )
         knowledge.id = knowledge.id or str(uuid.uuid4())
         knowledge.project = project_id
-        knowledge.category = category or KnowledgeClassifier.classify(knowledge)
+        if category:
+            knowledge.category = category
+        else:
+            # Детерминированная классификация с id правила (DS-017 §4.3.1):
+            # register игнорирует предзаполненный knowledge.category — финальная
+            # категория всегда от классификатора, если явный category не задан.
+            knowledge.category, _ = KnowledgeClassifier.classify_with_rule(
+                knowledge
+            )
         if not KnowledgeClassifier.is_valid(knowledge.category):
             raise LibrarianError(
                 f"Invalid category: {knowledge.category!r}"
@@ -133,6 +250,7 @@ class Librarian:
         knowledge.status = KNOWLEDGE_STATUS_NEW
         knowledge.confidence = ConfidenceEngine.calculate(knowledge)
         KnowledgeHistory.append(knowledge, EVENT_CREATED)
+        self._validate_incoming_relations(project_id, knowledge)
         saved = self._knowledge.save(knowledge)
         self._log(f"KnowledgeRegistered: {knowledge.id} ({knowledge.category})")
         return saved
@@ -171,6 +289,11 @@ class Librarian:
         knowledge.history = existing.history
         knowledge.confidence = ConfidenceEngine.calculate(knowledge)
         KnowledgeHistory.append(knowledge, EVENT_UPDATED)
+        # Валидируются только ИЗМЕНЁННЫЕ relations: неизменный набор (в т.ч.
+        # устаревший, с висячей целью) не блокирует правку других полей —
+        # висячие ссылки выявляет doctor (DS-017 §4.2.1, ЭТАП 3).
+        if knowledge.relations != existing.relations:
+            self._validate_incoming_relations(project_id, knowledge)
         saved = self._knowledge.update(knowledge)
         self._log(f"KnowledgeUpdated: {knowledge.id}")
         return saved

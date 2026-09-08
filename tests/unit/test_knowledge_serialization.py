@@ -12,7 +12,10 @@ from pathlib import Path
 from hkos.core.config import ConfigLoader
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
-from hkos.repository.knowledge_relations import RelationType
+from hkos.repository.knowledge_relations import (
+    KnowledgeRelation,
+    RelationType,
+)
 from hkos.repository.knowledge_repository import KnowledgeRepository
 from hkos.repository.models import Knowledge, KnowledgeHistoryEntry
 from hkos.repository.repository_manager import RepositoryManager
@@ -93,6 +96,29 @@ class TestKnowledgeSerialization:
         assert loaded.relations[0].relation_type is RelationType.MERGED_FROM
         assert loaded.relations[1].relation_type is RelationType.DERIVED_FROM
         assert loaded.relations[0].source_id == "a-1"
+
+    def test_cross_project_relation_roundtrip(self, tmp_path: Path) -> None:
+        """DS-017 ЭТАП 1: target_project_id и новые типы в полном roundtrip.
+
+        Кросс-проектное ребро (target_project_id="proj-b", тип BASED_ON)
+        переживает полный цикл save/load через Repository.
+        """
+        repo, _ = self._repo(tmp_path)
+        k = self._rich_knowledge()
+        k.project = "p1"
+        k.relations = [
+            KnowledgeRelation(
+                relation_id="rel-x", source_id="a-1", target_id="d-1",
+                relation_type=RelationType.BASED_ON, created_at="t2",
+                target_project_id="proj-b",
+            ),
+        ]
+        saved = repo.save(k)
+        loaded = repo.load("p1", saved.id)
+        assert len(loaded.relations) == 1
+        rel = loaded.relations[0]
+        assert rel.relation_type is RelationType.BASED_ON
+        assert rel.target_project_id == "proj-b"
 
     def test_history_roundtrip(self, tmp_path: Path) -> None:
         repo, _ = self._repo(tmp_path)

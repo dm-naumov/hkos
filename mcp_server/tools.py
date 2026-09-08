@@ -6,6 +6,7 @@ lives here — this layer only marshals arguments and serializes results.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import asdict
 from typing import Any, Callable
 
@@ -14,7 +15,12 @@ from hkos.core.exceptions import HKOSError
 from hkos.core.logger import HKOSLogger
 from hkos.core.version import VersionManager
 from hkos.mcp_server.context import McpContext
+from hkos.repository.knowledge_relations import (
+    KnowledgeRelation,
+    RelationType,
+)
 from hkos.repository.models import Knowledge
+from hkos.services.librarian.knowledge_classifier import VALID_CATEGORIES
 
 _PROJECT_HINT = "project id or name (created if missing for save)"
 
@@ -77,6 +83,45 @@ def tool_context(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _parse_relations(
+    raw_list: list[object],
+) -> tuple[list[KnowledgeRelation], list[str]]:
+    """Строгий разбор relations-стабов из аргументов save.
+
+    Возвращает (валидные KnowledgeRelation, причины отклонения). Никакой
+    семантики — только типизация: relation_type строго через RelationType,
+    target_id обязателен, каждому ребру назначается уникальный relation_id
+    (дедуп RelationshipIndex идёт по relation_id — пустой id теряет рёбра).
+    """
+    warnings: list[str] = []
+    relations: list[KnowledgeRelation] = []
+    for i, raw in enumerate(raw_list):
+        if not isinstance(raw, dict):
+            warnings.append(f"relations[{i}]: must be an object")
+            continue
+        raw_type = str(raw.get("relation_type") or "")
+        try:
+            relation_type = RelationType(raw_type)
+        except ValueError:
+            warnings.append(
+                f"relations[{i}]: unknown relation_type {raw_type!r}"
+            )
+            continue
+        target_id = str(raw.get("target_id") or "").strip()
+        if not target_id:
+            warnings.append(f"relations[{i}]: missing target_id")
+            continue
+        relations.append(
+            KnowledgeRelation(
+                relation_id=str(uuid.uuid4()),
+                target_id=target_id,
+                relation_type=relation_type,
+                target_project_id=str(raw.get("target_project_id") or ""),
+            )
+        )
+    return relations, warnings
+
+
 def tool_save(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
     """Write knowledge through the Librarian (the only write path)."""
     project = _resolve_project(ctx, str(args["project"]), create=True)
@@ -88,6 +133,35 @@ def tool_save(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
         kind=str(args.get("kind") or "fact"),
         confidence=int(args.get("confidence", 95)),
     )
+    warnings: list[str] = []
+    # Прозрачность классификации (DS-017 §4.3.1): register игнорирует
+    # knowledge.category — если подсказка агента переопределена классификатором
+    # или невалидна, агент получает warning с id сработавшего правила.
+    suggestion = str(args.get("category") or "").strip()
+    if suggestion:
+        final_category, rule = ctx.librarian.explain_category(knowledge)
+        if suggestion not in VALID_CATEGORIES:
+            warnings.append(
+                f"category suggestion {suggestion!r} is not a valid category; "
+                f"classified as {final_category} (rule: {rule})"
+            )
+        elif suggestion != final_category:
+            warnings.append(
+                f"category overridden: suggested {suggestion!r} classified "
+                f"as {final_category} (rule: {rule})"
+            )
+    raw_relations = args.get("relations") or []
+    if raw_relations:
+        relations, parse_warnings = _parse_relations(raw_relations)
+        warnings.extend(parse_warnings)
+        if relations:
+            # source id известен до register — self-loop проверяется
+            knowledge.id = knowledge.id or str(uuid.uuid4())
+            valid, relation_warnings = ctx.librarian.validate_relations(
+                project.id, knowledge.id, relations
+            )
+            warnings.extend(relation_warnings)
+            knowledge.relations = valid
     registered = ctx.librarian.register(project.id, knowledge)
     if args.get("canonicalize", True):
         ctx.librarian.canonicalize(project.id, registered.id)
@@ -100,6 +174,7 @@ def tool_save(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
         "category": entity.category,
         "kind": entity.kind,
         "status": entity.status,
+        "warnings": warnings,
     }
 
 
@@ -178,7 +253,9 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Deterministic retrieval from the engineering knowledge base. "
             "Returns ranked knowledge items with per-item explanations "
-            "(reason/score). Negative knowledge (past failures) ranks first."
+            "(reason/score). Past failures (kind='negative', category "
+            "FAILURE) get the Failure Priority ranking factor and rank "
+            "above otherwise-equivalent candidates."
         ),
         "inputSchema": {
             "type": "object",
@@ -217,7 +294,10 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Write a knowledge item through the Librarian (the only write "
             "path), canonicalize it and index it. The deterministic "
-            "classifier may override the suggested category."
+            "classifier may override the suggested category. Optional "
+            "relations[] links this item to existing entities (typed edges); "
+            "invalid links are dropped and the reasons are returned in the "
+            "'warnings' field of the response."
         ),
         "inputSchema": {
             "type": "object",
@@ -232,6 +312,35 @@ TOOLS: list[dict[str, Any]] = [
                 "kind": {"type": "string", "default": "fact",
                          "enum": ["fact", "negative"]},
                 "confidence": {"type": "number", "default": 95},
+                "relations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "target_id": {
+                                "type": "string",
+                                "description": "target entity id (same "
+                                               "project unless "
+                                               "target_project_id set)"},
+                            "relation_type": {
+                                "type": "string",
+                                "description": "typed edge, e.g. BASED_ON, "
+                                               "CAUSED_BY, MITIGATED_BY, "
+                                               "REFERENCE_TO, DERIVED_FROM"},
+                            "target_project_id": {
+                                "type": "string",
+                                "default": "",
+                                "description": "optional: cross-project "
+                                               "target (v1.2 model, "
+                                               "validation-ready)"},
+                        },
+                        "required": ["target_id", "relation_type"],
+                    },
+                    "default": [],
+                    "description": "optional typed links to existing "
+                                   "entities; invalid links are dropped "
+                                   "with reasons in response warnings",
+                },
                 "canonicalize": {"type": "boolean", "default": True},
             },
             "required": ["project", "title"],

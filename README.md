@@ -116,8 +116,9 @@ register ──► NEW ──► VERIFIED ──► CANONICAL ──► ARCHIVED
 - **VERIFIED** — passed validation;
 - **CANONICAL** — the only status visible to retrieval (reusable);
 - **ARCHIVED / REJECTED / SUPERSEDED** — filtered out of retrieval;
-  negative knowledge (FAILURE with cause/fix) is kept and resurfaces first
-  when the same mistake is about to be repeated.
+  negative knowledge (FAILURE with cause/fix) is kept and, thanks to the
+  Failure Priority ranking factor, resurfaces above otherwise-equivalent
+  candidates when the same mistake is about to be repeated.
 
 ## Quick start
 
@@ -242,6 +243,23 @@ hkos-mcp --root ./hkos        # data root (HKOS_DATA_ROOT / HKOS_PROFILE env)
 ```
 
 See [docs/mcp.md](docs/mcp.md) for the tool reference and client setup.
+
+## Ecosystem & integrations
+
+HKOS is an MCP citizen: one stdio server (`hkos-mcp`), zero daemons, plug into
+anything that speaks MCP.
+
+- **IDE presets** — ready-to-copy configs:
+  [Cursor](examples/cursor-mcp.json) (`.cursor/mcp.json`) and
+  [Windsurf](examples/windsurf-mcp.json) (`mcp_config.json`); Claude Desktop
+  config is in [docs/mcp.md](docs/mcp.md).
+- **Frameworks** — wiring examples for LangChain (`langchain-mcp-adapters`)
+  and AutoGen: [examples/integrations.md](examples/integrations.md).
+- **Demo** — “Git for agent memory”: an agent without HKOS repeats a past
+  failure, an agent with HKOS retrieves the FAILURE record and takes the right
+  path (deterministic, zero LLM): `python examples/demo_failure_recovery.py`.
+- **CLI** — `hkos doctor | status | validate` for terminal audits
+  (see [docs/administrator.md](docs/administrator.md)).
 
 ## Documentation
 

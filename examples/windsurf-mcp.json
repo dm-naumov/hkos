@@ -1,0 +1,12 @@
+{
+  "$schema": "https://mcp.windsurf.com/schema",
+  "mcpServers": {
+    "hkos": {
+      "command": "uvx",
+      "args": ["hkos-mcp"],
+      "env": {
+        "HKOS_DATA_ROOT": "/absolute/path/to/your/hkos-data-root"
+      }
+    }
+  }
+}

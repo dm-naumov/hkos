@@ -185,11 +185,32 @@ class TestLibrarian:
         assert k.category == "FAILURE"
         assert k.status == KNOWLEDGE_STATUS_NEW
 
-    def test_exactly_eleven_public_methods(self, tmp_path: Path) -> None:
+    def test_explain_category_matches_register(self, tmp_path: Path) -> None:
+        """DS-017 §4.3.1: explain_category == решению register (категория+rule)."""
+        lib, _ = self._librarian(tmp_path)
+        knowledge = Knowledge(title="Решение: использовать TProxy", kind="fact")
+        category, rule = lib.explain_category(knowledge)
+        assert category == "DECISION"
+        assert rule.startswith("rule:")
+        saved = lib.register("p1", knowledge)
+        assert saved.category == category
+
+    def test_explain_category_negative_kind(self, tmp_path: Path) -> None:
+        lib, _ = self._librarian(tmp_path)
+        category, rule = lib.explain_category(
+            Knowledge(title="X", kind="negative")
+        )
+        assert category == "FAILURE"
+        assert rule == "rule:kind:negative"
+
+    def test_exactly_thirteen_public_methods(self, tmp_path: Path) -> None:
+        """Ровно 13 публичных методов (DS-017 ЭТАП 2/4: validate_relations,
+        explain_category)."""
         lib, _ = self._librarian(tmp_path)
         api = {name for name in dir(lib) if not name.startswith("_")}
         assert api == {
             "register", "update", "canonicalize", "merge", "archive",
             "restore", "reject", "detect_conflicts",
             "recalculate_confidence", "history", "validate",
+            "validate_relations", "explain_category",
         }

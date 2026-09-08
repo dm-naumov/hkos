@@ -41,6 +41,88 @@ Design principles (same as the core system):
 | `doctor` | consistency check (repository vs index vs snapshot) | HkosDoctor |
 | `status` | version, data root, corpus size | VersionManager + repositories |
 
+## `save` tool: typed links (`relations`) and warnings
+
+`save` accepts an optional `relations` array to link the new knowledge item to
+existing entities (DS-017 §4.2.1, IP-017 ЭТАП 2):
+
+```json
+{
+  "project": "OpenWrt",
+  "title": "UDP bypasses the proxy",
+  "relations": [
+    {"target_id": "<existing-entity-id>", "relation_type": "BASED_ON"},
+    {"target_id": "<decision-id>", "relation_type": "CAUSED_BY",
+     "target_project_id": "<other-project-id>"}
+  ]
+}
+```
+
+Element fields: `target_id` (required), `relation_type` (required — one of the
+`RelationType` values, e.g. `BASED_ON`, `CAUSED_BY`, `MITIGATED_BY`,
+`REFERENCE_TO`, `DERIVED_FROM`), `target_project_id` (optional — cross-project
+target; empty = same project).
+
+Validation (deterministic, in the Librarian — the only write path):
+
+- the target must exist in the target project (knowledge/decision/artifact/
+  campaign entities are valid targets);
+- an explicit `target_project_id` must point to an existing project;
+- self-loops are rejected;
+- unknown `relation_type`, missing `target_id` or malformed elements are
+  rejected at the adapter layer.
+
+Invalid links are **dropped with reasons** — they never fail the whole save and
+are never persisted silently. The response always carries a `warnings` array:
+
+```json
+{ "id": "...", "project_id": "...", "category": "...", "status": "...",
+  "warnings": ["relations[2]: unknown relation_type 'TELEPORT'",
+               "relation target bogus-id: target not found in project ..."] }
+```
+
+Direct Python API callers get the same guarantees through
+`Librarian.validate_relations(project_id, source_id, relations)` (soft path,
+returns valid relations + reasons) and through `register`/`update`, which raise
+`LibrarianError` on invalid relations (strict backstop).
+
+### Category suggestion transparency (DS-017 §4.3.1)
+
+`save` accepts a `category` hint, but the deterministic classifier in the
+Librarian always decides the final category (`register` ignores a pre-set
+`knowledge.category`; only the explicit `category` parameter of
+`register`/`update` wins). Classification rules, in order:
+
+1. `kind = "negative"` → `FAILURE` (`rule:kind:negative`);
+2. keyword markers in title/body → category (`rule:marker:<CATEGORY>`);
+3. otherwise → `FACT` (`rule:default:fact`).
+
+If the agent's hint is overridden or invalid, the response `warnings` carries
+the reason with the id of the rule that fired:
+
+```json
+{ "id": "...", "category": "FAILURE", "warnings": [
+    "category overridden: suggested 'SUCCESS' classified as 'FAILURE' (rule: rule:kind:negative)"] }
+```
+
+A matching hint (or no hint) produces no category warning. The same decision
+for an unsaved knowledge item is available through
+`Librarian.explain_category(knowledge) -> (category, rule_id)` and
+`KnowledgeClassifier.classify_with_rule(knowledge)`.
+
+### IDE presets
+
+Ready-to-copy MCP configs ship in `examples/`:
+
+- **Cursor** — `examples/cursor-mcp.json` (place as `.cursor/mcp.json`);
+- **Windsurf** — `examples/windsurf-mcp.json` (place as `mcp_config.json`);
+- Claude Desktop — see the config above.
+
+All presets run `uvx hkos-mcp` and take the data root from the
+`HKOS_DATA_ROOT` environment variable — set it to an absolute path before
+first use. Framework wiring (LangChain / AutoGen) is in
+`examples/integrations.md`.
+
 Every tool returns JSON in the MCP text content envelope. Errors are returned
 as `isError: true` content (or JSON-RPC errors for protocol-level problems).
 

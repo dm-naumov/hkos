@@ -143,7 +143,8 @@ class RetrievalEngine:
         ranking_cfg = "retrieval.ranking"
         weights: dict[str, float] = {}
         for name in ("topic", "confidence", "project", "freshness", "usage",
-                     "canonical", "references", "success", "campaign", "decision"):
+                     "canonical", "references", "success", "campaign",
+                     "decision", "failure"):
             value = config.get(f"{ranking_cfg}.{name}_weight", 0.0)
             weights[name] = float(value) if isinstance(value, (int, float)) else 0.0
         caps: dict[str, int] = {}
@@ -261,6 +262,8 @@ class RetrievalEngine:
         parts: list[str] = []
         if factors.get("topic", 0.0) > 0.0:
             parts.append("Topic Match")
+        if factors.get("failure", 0.0) > 0.0:
+            parts.append("Failure Priority")
         if factors.get("canonical", 0.0) > 0.0:
             parts.append("Canonical")
         if factors.get("project", 0.0) > 0.0:

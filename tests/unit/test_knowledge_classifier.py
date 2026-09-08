@@ -8,6 +8,9 @@ from hkos.services.librarian.knowledge_classifier import (
     CATEGORY_FAILURE,
     CATEGORY_HYPOTHESIS,
     CATEGORY_SUCCESS,
+    RULE_DEFAULT_FACT,
+    RULE_KIND_NEGATIVE,
+    RULE_MARKER_PREFIX,
     VALID_CATEGORIES,
     KnowledgeClassifier,
 )
@@ -60,3 +63,51 @@ class TestKnowledgeClassifier:
         assert len(VALID_CATEGORIES) == 10
         assert KnowledgeClassifier.is_valid(CATEGORY_FACT)
         assert not KnowledgeClassifier.is_valid("BOGUS")
+
+
+class TestClassifyWithRule:
+    """DS-017 §4.3.1: (категория, id правила) — прозрачность классификации."""
+
+    def test_negative_kind_rule(self) -> None:
+        category, rule = KnowledgeClassifier.classify_with_rule(
+            Knowledge(title="X", kind="negative")
+        )
+        assert category == CATEGORY_FAILURE
+        assert rule == RULE_KIND_NEGATIVE
+
+    def test_marker_rule(self) -> None:
+        category, rule = KnowledgeClassifier.classify_with_rule(
+            Knowledge(title="TProxy работает", body="")
+        )
+        assert category == CATEGORY_SUCCESS
+        assert rule == f"{RULE_MARKER_PREFIX}{CATEGORY_SUCCESS}"
+
+    def test_default_rule(self) -> None:
+        category, rule = KnowledgeClassifier.classify_with_rule(
+            Knowledge(title="Something plain", body="text")
+        )
+        assert category == CATEGORY_FACT
+        assert rule == RULE_DEFAULT_FACT
+
+    def test_rule_ids_are_stable_strings(self) -> None:
+        for _, rule in (
+            KnowledgeClassifier.classify_with_rule(
+                Knowledge(title="X", kind="negative")),
+            KnowledgeClassifier.classify_with_rule(
+                Knowledge(title="Решение: выбрать X", body="")),
+            KnowledgeClassifier.classify_with_rule(
+                Knowledge(title="plain", body="")),
+        ):
+            assert isinstance(rule, str) and rule.startswith("rule:")
+
+    def test_classify_matches_classify_with_rule_first_component(
+        self,
+    ) -> None:
+        for knowledge in (
+            Knowledge(title="X", kind="negative"),
+            Knowledge(title="TProxy работает", body=""),
+            Knowledge(title="plain fact", body=""),
+        ):
+            category, rule = KnowledgeClassifier.classify_with_rule(knowledge)
+            assert KnowledgeClassifier.classify(knowledge) == category
+            assert rule

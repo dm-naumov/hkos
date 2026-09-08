@@ -13,7 +13,7 @@ from hkos.retrieval.ranking_engine import RankingEngine
 WEIGHTS = {
     "topic": 0.25, "confidence": 0.15, "project": 0.10, "freshness": 0.10,
     "usage": 0.05, "canonical": 0.15, "references": 0.05, "success": 0.05,
-    "campaign": 0.05, "decision": 0.05,
+    "campaign": 0.05, "decision": 0.05, "failure": 0.05,
 }
 CAPS = {"usage": 10, "references": 10, "confirmations": 10}
 
@@ -161,3 +161,107 @@ class TestRankingEngine:
             parsed, "p1",
         )
         assert result[0].factors["decision"] == 1.0
+
+
+class TestFailurePriority:
+    """IP-017 ЭТАП 7: фактор Failure Priority (прошлые сбои выше среди равных)."""
+
+    def _engine(self, repos: FakeRepos) -> RankingEngine:
+        return RankingEngine(
+            cast(RepositoryManager, repos), WEIGHTS, CAPS, half_life_days=90.0
+        )
+
+    def test_failure_factor_negative_kind(self) -> None:
+        k = Knowledge(
+            id="k1", project="p1", title="X", kind="negative",
+            status="NEW", confidence=50,
+        )
+        engine = self._engine(FakeRepos({"k1": k}))
+        result = engine.rank(
+            CandidateSet(entries=[IndexEntry(id="k1", type="knowledge", project="p1")]),
+            ParsedQuery(keywords=["x"]), "p1",
+        )
+        assert result[0].factors["failure"] == 1.0
+
+    def test_failure_factor_failure_category(self) -> None:
+        k = Knowledge(
+            id="k1", project="p1", title="X", category="FAILURE",
+            status="NEW", confidence=50,
+        )
+        engine = self._engine(FakeRepos({"k1": k}))
+        result = engine.rank(
+            CandidateSet(entries=[IndexEntry(id="k1", type="knowledge", project="p1")]),
+            ParsedQuery(keywords=["x"]), "p1",
+        )
+        assert result[0].factors["failure"] == 1.0
+
+    def test_failure_factor_zero_for_plain_fact(self) -> None:
+        k = Knowledge(id="k1", project="p1", title="X", status="NEW", confidence=50)
+        engine = self._engine(FakeRepos({"k1": k}))
+        result = engine.rank(
+            CandidateSet(entries=[IndexEntry(id="k1", type="knowledge", project="p1")]),
+            ParsedQuery(keywords=["x"]), "p1",
+        )
+        assert result[0].factors["failure"] == 0.0
+
+    def test_failure_factor_not_applied_to_decisions(self) -> None:
+        """Decision c категорией FAILURE не получает failure-фактор (тип ≠ knowledge)."""
+        k = Knowledge(id="k1", project="p1", title="X", category="FAILURE", status="NEW")
+        engine = self._engine(FakeRepos({"k1": k}))
+        result = engine.rank(
+            CandidateSet(entries=[IndexEntry(id="k1", type="decision", project="p1")]),
+            ParsedQuery(keywords=["x"]), "p1",
+        )
+        assert result[0].factors["failure"] == 0.0
+        assert result[0].factors["decision"] == 1.0
+
+    def test_failure_ranks_first_among_equals(self) -> None:
+        """При равных прочих факторах FAILURE выше FACT и DECISION."""
+        failure = Knowledge(
+            id="f1", project="p1", title="mtu tunnel udp", kind="negative",
+            status="CANONICAL", confidence=50,
+        )
+        fact = Knowledge(
+            id="a1", project="p1", title="mtu tunnel udp",
+            status="CANONICAL", confidence=50,
+        )
+        decision = Knowledge(
+            id="d1", project="p1", title="mtu tunnel udp",
+            status="CANONICAL", confidence=50,
+        )
+        engine = self._engine(FakeRepos({
+            "f1": failure, "a1": fact, "d1": decision}))
+        parsed = ParsedQuery(topic="mtu", keywords=["mtu", "tunnel", "udp"])
+        result = engine.rank(
+            CandidateSet(entries=[
+                IndexEntry(id="f1", type="knowledge", project="p1"),
+                IndexEntry(id="a1", type="knowledge", project="p1"),
+                IndexEntry(id="d1", type="knowledge", project="p1"),
+            ]),
+            parsed, "p1",
+        )
+        ids = [c.entity.id for c in result]
+        assert ids[0] == "f1", f"FAILURE must rank first among equals: {ids}"
+        assert result[0].factors["failure"] == 1.0
+
+    def test_topic_match_still_beats_failure_priority(self) -> None:
+        """Сильное topic-совпадение (не сбой) не глушится слабым FAILURE."""
+        matched = Knowledge(
+            id="m1", project="p1", title="exact relevant fact",
+            status="CANONICAL", confidence=90,
+        )
+        weak_failure = Knowledge(
+            id="f1", project="p1", title="old unrelated", kind="negative",
+            status="CANONICAL", confidence=50,
+        )
+        engine = self._engine(FakeRepos({"m1": matched, "f1": weak_failure}))
+        parsed = ParsedQuery(topic="exact", keywords=["exact", "relevant"])
+        result = engine.rank(
+            CandidateSet(entries=[
+                IndexEntry(id="m1", type="knowledge", project="p1"),
+                IndexEntry(id="f1", type="knowledge", project="p1"),
+            ]),
+            parsed, "p1",
+        )
+        assert result[0].entity.id == "m1", (
+            "topic weight must dominate the small failure boost")
