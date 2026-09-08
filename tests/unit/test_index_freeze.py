@@ -75,10 +75,12 @@ class TestFreezeConditions:
         assert isinstance(index, RelationshipReader)
 
     def test_no_direct_storage_in_index_except_store(self) -> None:
-        """Conditions 3-4: только IndexStore имеет storage-доступ."""
+        """Conditions 3-4: storage-доступ только у бэкендов IndexStore
+        (index_store.py — JSON; sqlite_store.py — SQLite, DS-017 §4.1)."""
         index_dir = os.path.join(os.path.dirname(__file__), "..", "..", "index")
+        store_modules = {"index_store.py", "sqlite_store.py"}
         for name in sorted(os.listdir(index_dir)):
-            if not name.endswith(".py") or name == "index_store.py":
+            if not name.endswith(".py") or name in store_modules:
                 continue
             source = open(os.path.join(index_dir, name), encoding="utf-8").read()
             assert "StorageEngine" not in source, f"{name}: StorageEngine"
