@@ -15,7 +15,7 @@ Traversal работает ИСКЛЮЧИТЕЛЬНО через Q4 (Query Contr
 max_related (по умолчанию 10), relation_decay (по умолчанию 0.8).
 """
 
-from typing import Any
+from typing import Any, Callable
 
 from hkos.repository.repository_manager import RepositoryManager
 from hkos.retrieval.ranking_engine import RankedCandidate
@@ -24,7 +24,14 @@ __all__ = ["RelationshipTraverser"]
 
 
 class RelationshipTraverser:
-    """Обход связей через Q4 (BFS с ограничением глубины и объёма)."""
+    """Обход связей через Q4 (BFS с ограничением глубины и объёма).
+
+Кросс-проектные цели (DS-017 v1.2): ребро с target_project_id, отличным
+от проекта источника, обходится через снапшот ЦЕЛЕВОГО проекта
+(snapshot_provider). Каждый узел BFS несёт свой проект; рёбра родителя
+читаются из снапшота его проекта, метаданные соседа — из снапшота проекта
+соседа. Детерминизм: visited по глобальному id, порядок BFS сохраняется.
+Без snapshot_provider поведение идентично прежнему (только текущий проект)."""
 
     def __init__(
         self,
@@ -62,12 +69,17 @@ class RelationshipTraverser:
         ranked: list[RankedCandidate],
         project: str,
         snapshot: Any | None = None,
+        snapshot_provider: Callable[[str], Any] | None = None,
     ) -> list[RankedCandidate]:
         """Расширить кандидатов связанными знаниями (через Q4).
 
         Args:
             ranked: Ранжированные кандидаты (после фильтра).
             project: UUID проекта.
+            snapshot: Снапшот индексов проекта (Q4).
+            snapshot_provider: Создание снапшота произвольного проекта —
+                обход кросс-проектных целей (target_project_id). None:
+                обход ограничен текущим проектом (как ранее).
 
         Returns:
             Исходные кандидаты + связанные (с relation_path и score*decay).
@@ -79,19 +91,32 @@ class RelationshipTraverser:
         visited: set[str] = set()
         related_count = 0
 
-        # Очередь BFS: (candidate, depth, path)
-        queue: list[tuple[RankedCandidate, int, list[str]]] = [
-            (candidate, 0, []) for candidate in ranked
-        ]
+        # Снапшот на проект: корневой инжектирован; для кросс-проектных
+        # целей создаётся провайдером (кэшируется на узел обхода).
+        snapshots: dict[str, Any] = {project: snapshot}
+
+        def snap_for(pid: str) -> Any | None:
+            if pid not in snapshots:
+                if snapshot_provider is None:
+                    return None
+                snapshots[pid] = snapshot_provider(pid)
+            return snapshots[pid]
+
+        # Очередь BFS: (candidate, depth, path, project узла)
+        queue: list[tuple[RankedCandidate, int, list[str], str]] = []
         for candidate in ranked:
             visited.add(candidate.entity.id)
             result.append(candidate)
+            queue.append((candidate, 0, [], project))
 
         while queue and related_count < self._max_related:
-            parent, depth, path = queue.pop(0)
+            parent, depth, path, parent_project = queue.pop(0)
             if depth >= self._max_depth:
                 continue
-            relations = snapshot.relations_of_knowledge(parent.entity.id)
+            parent_snap = snap_for(parent_project)
+            if parent_snap is None:
+                continue
+            relations = parent_snap.relations_of_knowledge(parent.entity.id)
             for relation in relations:
                 if related_count >= self._max_related:
                     break
@@ -99,13 +124,28 @@ class RelationshipTraverser:
                     f"{relation.relation_id}:{relation.relation_type.value}"
                     f":{relation.source_id}->{relation.target_id}"
                 )
-                for node in (relation.source_id, relation.target_id):
-                    if node == parent.entity.id or node in visited:
+                # Кандидаты-соседи с их проектами: источник живёт в проекте
+                # снапшота (владелец ребра); цель — в целевом проекте, если
+                # ребро кросс-проектное (target_project_id).
+                neighbors: list[tuple[str, str]] = []
+                if relation.source_id != parent.entity.id:
+                    neighbors.append((relation.source_id, parent_project))
+                if relation.target_id != parent.entity.id:
+                    target_pid = (
+                        relation.target_project_id
+                        or parent_project
+                    )
+                    neighbors.append((relation.target_id, target_pid))
+                for node, node_project in neighbors:
+                    if node in visited:
                         continue
-                    record = snapshot.entity_get(node)
+                    node_snap = snap_for(node_project)
+                    if node_snap is None:
+                        continue
+                    record = node_snap.entity_get(node)
                     if record is None:
                         continue
-                    entity = self._load(project, node, record.type)
+                    entity = self._load(node_project, node, record.type)
                     if entity is None:
                         continue
                     visited.add(node)
@@ -119,6 +159,8 @@ class RelationshipTraverser:
                         relation_path=path + [hop],
                     )
                     result.append(related)
-                    queue.append((related, depth + 1, path + [hop]))
+                    queue.append(
+                        (related, depth + 1, path + [hop], node_project)
+                    )
 
         return result

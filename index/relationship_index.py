@@ -52,6 +52,9 @@ def _relation_to_record(relation: KnowledgeRelation) -> dict[str, str]:
         "target_id": relation.target_id,
         "relation_type": relation.relation_type.value,
         "created_at": relation.created_at,
+        # Кросс-проектные цели (DS-017 v1.2): целевой проект ребра.
+        # "" = цель в проекте владельца (обратная совместимость).
+        "target_project_id": relation.target_project_id,
     }
 
 
@@ -70,6 +73,7 @@ def _record_to_relation(record: dict[str, Any]) -> KnowledgeRelation:
         target_id=str(record.get("target_id", "")),
         relation_type=relation_type,
         created_at=str(record.get("created_at", "")),
+        target_project_id=str(record.get("target_project_id", "")),
     )
 
 

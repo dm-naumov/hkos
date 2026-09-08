@@ -134,6 +134,14 @@ class Librarian:
             if reason is not None:
                 warnings.append(reason)
                 continue
+            # Нормализация владельца: ребро авторинга без source исходит из
+            # владельца (иначе рёбра «мертвы» для обхода — out[""]);
+            # relation_id генерируется при отсутствии (дедуп по пустому id
+            # терял бы рёбра — правило MCP-слоя, DS-017 §4.2).
+            if not relation.source_id:
+                relation.source_id = source_id
+            if not relation.relation_id:
+                relation.relation_id = str(uuid.uuid4())
             valid.append(relation)
         return valid, warnings
 

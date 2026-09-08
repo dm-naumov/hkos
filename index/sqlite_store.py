@@ -66,6 +66,7 @@ def _rows_to_relations(rows: list[Any]) -> list[Any]:
             "target_id": row[2],
             "relation_type": row[3],
             "created_at": row[4],
+            "target_project_id": row[5],
         }
         if record["relation_id"] in seen:
             continue
@@ -133,11 +134,22 @@ class SqliteIndexStore:
             CREATE TABLE IF NOT EXISTS rel(
                 relation_id TEXT NOT NULL, owner_id TEXT NOT NULL,
                 source_id TEXT NOT NULL, target_id TEXT NOT NULL,
-                relation_type TEXT NOT NULL, created_at TEXT NOT NULL);
+                relation_type TEXT NOT NULL, created_at TEXT NOT NULL,
+                target_project_id TEXT NOT NULL DEFAULT '');
             CREATE TABLE IF NOT EXISTS st(
                 key TEXT PRIMARY KEY, count INTEGER NOT NULL);
             """
         )
+        # Upgrade существующих БД (схема v1 -> v1.2): колонка
+        # target_project_id (кросс-проектные рёбра, DS-017).
+        columns = {
+            row[1] for row in con.execute("PRAGMA table_info(rel)")
+        }
+        if "target_project_id" not in columns:
+            con.execute(
+                "ALTER TABLE rel ADD COLUMN target_project_id TEXT"
+                " NOT NULL DEFAULT ''"
+            )
 
     # --- Публичный контракт (как IndexStore) ---
 
@@ -295,8 +307,8 @@ class SqliteIndexStore:
                     for rel in getattr(entity, "relations", None) or []:
                         con.execute(
                             "INSERT INTO rel(relation_id, owner_id, source_id,"
-                            " target_id, relation_type, created_at)"
-                            " VALUES(?,?,?,?,?,?)",
+                            " target_id, relation_type, created_at,"
+                            " target_project_id) VALUES(?,?,?,?,?,?,?)",
                             (
                                 str(getattr(rel, "relation_id", "") or ""),
                                 entity.id,
@@ -305,6 +317,8 @@ class SqliteIndexStore:
                                 str(getattr(rel, "target_id", "") or ""),
                                 _relation_type_str(rel),
                                 str(getattr(rel, "created_at", "") or ""),
+                                str(getattr(rel, "target_project_id", "")
+                                    or ""),
                             ),
                         )
                 # статистика: дельта (как IndexUpdater: смена типа -> -1/+1;
@@ -494,8 +508,8 @@ class SqliteIndexStore:
             for record in records:
                 con.execute(
                     "INSERT INTO rel(relation_id, owner_id, source_id,"
-                    " target_id, relation_type, created_at)"
-                    " VALUES(?,?,?,?,?,?)",
+                    " target_id, relation_type, created_at,"
+                    " target_project_id) VALUES(?,?,?,?,?,?,?)",
                     (
                         record.get("relation_id", ""),
                         owner_id,
@@ -503,6 +517,7 @@ class SqliteIndexStore:
                         record.get("target_id", ""),
                         record.get("relation_type", ""),
                         record.get("created_at", ""),
+                        str(record.get("target_project_id", "") or ""),
                     ),
                 )
 
@@ -594,7 +609,8 @@ class SqliteIndexStore:
     def _read_relations(con: sqlite3.Connection) -> dict[str, Any]:
         rows = con.execute(
             "SELECT rowid, relation_id, owner_id, source_id, target_id,"
-            " relation_type, created_at FROM rel ORDER BY rowid"
+            " relation_type, created_at, target_project_id"
+            " FROM rel ORDER BY rowid"
         ).fetchall()
         out: dict[str, list[dict[str, str]]] = {}
         inn: dict[str, list[dict[str, str]]] = {}
@@ -606,6 +622,7 @@ class SqliteIndexStore:
                 "target_id": row[4],
                 "relation_type": row[5],
                 "created_at": row[6],
+                "target_project_id": row[7],
             }
             entity_relations.setdefault(row[2], []).append(record)
             out.setdefault(row[3], []).append(record)
@@ -699,12 +716,14 @@ class SqliteIndexSnapshot:
         """
         out = self._con.execute(
             "SELECT relation_id, source_id, target_id, relation_type,"
-            " created_at FROM rel WHERE source_id=? ORDER BY rowid",
+            " created_at, target_project_id FROM rel"
+            " WHERE source_id=? ORDER BY rowid",
             (knowledge_id,),
         ).fetchall()
         inn = self._con.execute(
             "SELECT relation_id, source_id, target_id, relation_type,"
-            " created_at FROM rel WHERE target_id=? ORDER BY rowid",
+            " created_at, target_project_id FROM rel"
+            " WHERE target_id=? ORDER BY rowid",
             (knowledge_id,),
         ).fetchall()
         return _rows_to_relations(out + inn)
@@ -713,7 +732,7 @@ class SqliteIndexSnapshot:
         """Q4: все рёбра проекта (dedup по relation_id, stable sort)."""
         rows = self._con.execute(
             "SELECT relation_id, source_id, target_id, relation_type,"
-            " created_at FROM rel ORDER BY rowid",
+            " created_at, target_project_id FROM rel ORDER BY rowid",
         ).fetchall()
         return _rows_to_relations(rows)
 

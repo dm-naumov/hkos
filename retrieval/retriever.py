@@ -56,6 +56,7 @@ class Retriever:
         top_n: int | None = None,
         include_history: bool = False,
         snapshot: Any | None = None,
+        snapshot_provider: Any | None = None,
     ) -> list[RankedCandidate]:
         """Запустить конвейер и вернуть выбранные кандидаты.
 
@@ -66,6 +67,7 @@ class Retriever:
             top_n: Ограничение результата (None -> конфигурация).
             include_history: Включить исторические статусы.
             snapshot: IndexSnapshot (снимок индексов на запрос).
+            snapshot_provider: Снапшоты произвольных проектов (кросс-обход).
 
         Returns:
             Выбранные RankedCandidate (Top N).
@@ -80,6 +82,7 @@ class Retriever:
             top_n=top_n,
             include_history=include_history,
             snapshot=snapshot,
+            snapshot_provider=snapshot_provider,
         )
 
     def run_parsed(
@@ -90,6 +93,7 @@ class Retriever:
         top_n: int | None = None,
         include_history: bool = False,
         snapshot: Any | None = None,
+        snapshot_provider: Any | None = None,
         refine_limit: int = 60,
     ) -> list[RankedCandidate]:
         """Конвейер по уже разобранному запросу."""
@@ -107,8 +111,12 @@ class Retriever:
             ranked, include_history or parsed.include_history
         )
 
-        # 5. Relationship Traverser (Q4, снимок индекса)
-        expanded = self._traverser.traverse(filtered, project or "", snapshot)
+        # 5. Relationship Traverser (Q4, снимок индекса; кросс-проектные
+        #    цели через snapshot_provider — DS-017 v1.2)
+        expanded = self._traverser.traverse(
+            filtered, project or "", snapshot,
+            snapshot_provider=snapshot_provider,
+        )
 
         # 6. Knowledge Selector (Top N)
         selected = self._selector.select(expanded, top_n or 0)

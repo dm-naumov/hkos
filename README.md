@@ -279,8 +279,8 @@ anything that speaks MCP.
   snapshot, services, migration, integration, performance layers.
 - **v1.1** — MCP adapter (stdio server for any MCP client), semantic search as
   an *optional* backend (SSOT untouched), CLI package.
-- **v1.2** — SQLite storage backend (same API, envelope format preserved),
-  cross-project knowledge graphs.
+- **v1.2** — SQLite index backend (delta writes, `hkos migrate`, same API),
+  cross-project relationship traversal (deterministic, via Q4).
 
 ## License
 

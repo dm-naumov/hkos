@@ -309,6 +309,7 @@ class RetrievalEngine:
             top_n=top_n if top_n is not None else self._top_n,
             include_history=include_history,
             snapshot=snapshot,
+            snapshot_provider=self._query.snapshot,
             refine_limit=self._refine_limit,
         )
         self._logger.info(f"Candidates Built: {len(candidates)}")
@@ -407,7 +408,10 @@ class RetrievalEngine:
             max_depth=depth if depth is not None else self._max_depth,
             max_related=100,
         )
-        expanded = traverser.traverse([seed], project_id, snapshot)
+        expanded = traverser.traverse(
+            [seed], project_id, snapshot,
+            snapshot_provider=self._query.snapshot,
+        )
         selected = self._retriever._selector.select(
             expanded[1:], top_n if top_n is not None else self._top_n
         )
