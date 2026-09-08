@@ -4,7 +4,7 @@
 # Профиль: production (ConfigLoader(profile="production"))
 
 hkos:
-  version: "1.1.0"
+  version: "1.2.0"
   root: ./hkos
   enabled: true
   # Индексный бэкенд: json (default, человекочитаемый) | sqlite (дельта, DS-017)

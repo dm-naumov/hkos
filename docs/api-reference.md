@@ -18,12 +18,21 @@
 
 - IndexEngine: build/rebuild/update/remove/validate/statistics/optimize/health
 - IndexQueryExecutor (Q1–Q5): keyword_search/tag_search/entity_get/relations/statistics; snapshot()
+  (JSON: кэш + parse 5 доков; SQLite-бэкенд: снапшот без parse — Q исполняются SQL)
 - IndexCache: get/set/invalidate/clear
+- Персистентность: IndexStore (JSON `*.idx`, default) и SqliteIndexStore
+  (`indexes/index_store.db`, дельта update_entity/remove_entity, снапшот
+  SqliteIndexSnapshot) — выбор конфигом `hkos.index.backend`. Структурные
+  протоколы IndexStoreLike/SqliteStoreLike принимаются всеми слоями.
 
 ## Retrieval
 
 - RetrievalEngine.retrieve(query, project_id, campaign_id, top_n, include_history) → RetrievalResult
+  (включает обход связей; кросс-проектные цели обходятся автоматически)
 - RetrievalItem: entity/entity_type/explanation (reason/score/...)
+- RelationshipTraverser.traverse(ranked, project, snapshot, snapshot_provider=None):
+  BFS через Q4; `snapshot_provider` открывает снапшоты других проектов для
+  кросс-проектных рёбер (`target_project_id` в записи relations-индекса).
 
 ## Context
 
@@ -70,3 +79,8 @@
 ## SnapshotPersistence port
 
 latest(project)/version(project, v)/save(project, doc)/history(project)/append_history
+
+## CLI (hkos)
+
+`hkos status` / `hkos doctor --project` / `hkos validate --project` /
+`hkos migrate [--project] [--check] [--force]` — см. Administrator Guide.

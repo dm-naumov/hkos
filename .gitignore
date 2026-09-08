@@ -57,3 +57,6 @@ retrieve_step0.py
 *.swo
 .DS_Store
 Thumbs.db
+
+# local scratch (user)
+index_traveller.py

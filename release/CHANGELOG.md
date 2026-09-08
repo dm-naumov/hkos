@@ -1,5 +1,46 @@
 # HKOS Changelog
 
+## [1.2.0] — 2026-09-08 (feature release, DS-017 v1.2)
+
+### Added — SQLite index backend (IP-017-v1.2, ЭТАПЫ 1–3)
+
+- `SqliteIndexStore`: second official Index Layer backend — one
+  `indexes/index_store.db` per project (stdlib sqlite3, zero new deps,
+  WAL). Full IndexStore contract: read/write/exists/delete/list_names/
+  fingerprint; the five JSON index docs are mirrored 1:1 (order-preserving).
+- Delta write path: `update_entity`/`remove_entity` replace one entity's
+  rows in a single transaction — O(entity size), not O(corpus); index
+  update through `IndexEngine` is routed to the delta automatically.
+  Measured on an equal stand: ~73× faster than the full `.idx` rewrite
+  over 2000 sequential updates.
+- SQL query layer: `SqliteIndexSnapshot` executes Q1–Q5 as SQL (B-tree
+  seek) behind the frozen IndexSnapshot interface; no parse, no cache.
+- Selection by config: `hkos.index.backend: json|sqlite` (json default);
+  honored by the MCP context and the CLI. SSOT stays plain JSON.
+- `hkos migrate [--project] [--check] [--force]` — explicit JSON→SQLite
+  index migration (no automatic trigger, per DS-017); `--check` dry run,
+  re-runs skip migrated projects unless `--force`.
+- Fix: empty `entity_words`/`entity_tags` markers (`id: []`) were lost in
+  SQLite — seq=-1 marker rows restore exact JSON parity.
+
+### Added — cross-project graph traversal (IP-017-v1.2, ЭТАП 4)
+
+- `RelationshipTraverser` is project-aware: BFS carries each node's
+  project; edges are read from the node's own project snapshot and
+  cross-project targets (`target_project_id`) are resolved through the
+  target project's snapshot (`snapshot_provider`); retrieval wires it in.
+- Relations index records now carry `target_project_id` (additive; `""`
+  = intra-project); SQLite `rel` gained the column with a safe upgrade of
+  existing databases (ALTER TABLE ... DEFAULT '').
+- Authoring fix: edges without `source_id` were dead for traversal
+  (`out[""]`) — `Librarian.validate_relations` now normalizes source to
+  the owner and generates a missing `relation_id`.
+
+### Fixed
+
+- Relations authoring produced unreachable edges when `source_id` was
+  omitted (previous release gap) — see above.
+
 ## [1.1.0] — 2026-09-08 (feature release, DS-017 v1.1)
 
 ### Added — graph authoring (DS-017, IP-017 ЭТАПЫ 1–3)

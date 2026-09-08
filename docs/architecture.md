@@ -13,8 +13,8 @@ core <- storage <- repository <- index <- retrieval/context/snapshot
 - **core**: configuration (ConfigLoader, development/production profiles), logging, versions, exceptions.
 - **storage**: StorageEngine + JSONStore (file storage, HKOS-08 envelopes); the only access to the filesystem.
 - **repository**: RepositoryManager + BaseRepository (projects/campaigns/knowledge/decisions/artifacts). **The repository is the single source of truth (SSOT)**; only services write through it.
-- **index**: IndexEngine (build/rebuild/update/remove/validate/statistics) + Query Contract Q1–Q5 (IndexQueryExecutor, IndexSnapshot) + IndexCache (internal parse cache).
-- **retrieval**: RetrievalEngine (query → candidates → ranking → explanation); reads ONLY the index and the repository by UUID.
+- **index**: IndexEngine (build/rebuild/update/remove/validate/statistics) + Query Contract Q1–Q5 (IndexQueryExecutor, IndexSnapshot) + IndexCache (internal parse cache). Два официальных бэкенда персистентности (конфиг `hkos.index.backend`): JSON `*.idx` (default — человекочитаемый, git-diff) и SQLite `indexes/index_store.db` (DS-017 v1.2): дельта-записи O(размер сущности) в транзакциях WAL, Q1–Q5 исполняются SQL, миграция — только явной командой `hkos migrate`. SSOT (repository) не затрагивается ни одним бэкендом.
+- **retrieval**: RetrievalEngine (query → candidates → ranking → explanation); reads ONLY the index and the repository by UUID. RelationshipTraverser (Q4) обходит связи; кросс-проектные цели (`target_project_id`) — через снапшоты целевых проектов (детерминированный BFS, DS-017 v1.2).
 - **context**: ContextBuilder (task/project/campaign/snapshot → ContextDocument); SnapshotLoader.
 - **snapshot**: SnapshotEngine (create/load/history) — a derived representation of the repository (classification via the entity index + classification_policy).
 - **services**: ProjectManager, CampaignManager (FSM), Librarian (register/update/canonicalize/archive/restore/reject/validate), MemoryService (full-cycle orchestration), classification_policy (single source of categories).

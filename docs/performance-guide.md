@@ -34,3 +34,9 @@
 - 1M: mechanism validated (200K in-session); full run is a dedicated window
   (HKOS_STRESS_SCALE=1000000).
 - Cold retrieval costs O(index) — paid once per (project, fingerprint); warm is O(1).
+- Index write path (DS-017 v1.2): JSON backend rewrites all five `*.idx`
+  per update — O(corpus), measured 279 ms at 2000 records (over the 150 ms
+  SLA). SQLite backend (`hkos.index.backend: sqlite`) replaces the rewrite
+  with a per-entity delta transaction (O(entity size), WAL): measured on an
+  equal stand ~73× faster than the JSON rewrite over 2000 sequential
+  updates. SSOT writes are unchanged and identical for both backends.
