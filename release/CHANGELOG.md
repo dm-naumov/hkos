@@ -1,5 +1,52 @@
 # HKOS Changelog
 
+## [1.1.0] — 2026-09-08 (feature release, DS-017 v1.1)
+
+### Added — graph authoring (DS-017, IP-017 ЭТАПЫ 1–3)
+
+- `KnowledgeRelation.target_project_id` (additive; `""` = intra-project edge)
+  — cross-project edges are now representable and validated (full traversal
+  is roadmap v1.2).
+- `RelationType` +3 engineering semantics: `BASED_ON`, `CAUSED_BY`,
+  `MITIGATED_BY` (ФАКТ → РЕШЕНИЕ → СБОЙ traceability).
+- `relations[]` in `save` (API + MCP): typed links to existing entities;
+  deterministic validation in the Librarian (target exists — including
+  cross-project — no self-loops); invalid links are dropped with reasons in
+  `warnings`, never silently. `Librarian.validate_relations()` soft path;
+  `register`/`update` strict backstop.
+- Doctor: 5th check group `relations FK: dangling links` — flags dangling
+  edges (same-project and cross-project), PASS/FAIL with examples.
+
+### Added — save transparency (IP-017 ЭТАП 4)
+
+- `KnowledgeClassifier.classify_with_rule()` returns stable rule ids
+  (`rule:kind:negative`, `rule:marker:<CATEGORY>`, `rule:default:fact`);
+  `Librarian.explain_category()` exposes the same decision pre-save.
+- MCP `save` reports category overrides/invalid hints in `warnings` with the
+  rule id — no more silent reclassification.
+
+### Added — CLI & packaging (IP-017 ЭТАП 5)
+
+- New `hkos` console script / `python -m hkos.cli`: `doctor` (exit 0/1/2/3),
+  `status`, `validate`; `scripts/doctor_cli.py` is now a thin wrapper.
+- `FileSnapshotPersistence` consolidated to `hkos.snapshot.file_persistence`
+  (single canonical backend; `mcp_server.persistence` re-exports it).
+
+### Added — ecosystem (IP-017 ЭТАП 6)
+
+- IDE presets: `examples/cursor-mcp.json`, `examples/windsurf-mcp.json`;
+  framework wiring in `examples/integrations.md` (LangChain / AutoGen).
+- Demo «Git for agent memory»: `examples/demo_failure_recovery.py`.
+- README «Ecosystem & integrations» section.
+
+### Added — Failure Priority ranking (IP-017 ЭТАП 7)
+
+- Deterministic `failure` ranking factor: knowledge with `kind=negative` /
+  category FAILURE ranks above otherwise-equivalent candidates (weight
+  `retrieval.ranking.failure_weight`, default 0.05); reason label
+  «Failure Priority». Previously claimed but not implemented — now real and
+  covered by tests and the demo.
+
 ## [1.0.1] — 2026-08-19 (patch)
 
 ### Fixed
