@@ -20,7 +20,7 @@ Legacy pre-validation states are mapped conservatively:
 This policy never manufactures verification from `under_review`. Unknown
 values remain visible to validation on read and are rejected on write.
 
-The deprecated constant names `KNOWLEDGE_STATUS_CANDIDATE`,
+The legacy compatibility constant names `KNOWLEDGE_STATUS_CANDIDATE`,
 `KNOWLEDGE_STATUS_UNDER_REVIEW`, and `KNOWLEDGE_STATUS_VALIDATED` remain as
 1.x import aliases. They do not add lifecycle states.
 
