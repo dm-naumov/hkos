@@ -12,6 +12,7 @@ __all__ = [
     "RepositoryError",
     "RepositoryNotFoundError",
     "RepositoryParseError",
+    "RepositoryConcurrencyError",
 ]
 
 
@@ -29,3 +30,11 @@ class RepositoryNotFoundError(RepositoryError):
 
 class RepositoryParseError(RepositoryError):
     """Документ не соответствует ожидаемому типу или структуре."""
+
+
+class RepositoryConcurrencyError(RepositoryError):
+    """Оптимистичная блокировка: документ изменён параллельной записью.
+
+    Бросается из update() когда переданный expected_revision не совпадает
+    с текущим счётчиком ревизий документа.
+    """
