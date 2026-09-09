@@ -27,6 +27,7 @@ def canonical_system_knowledge(
         knowledge: Knowledge,
         category: str | None = None,
     ) -> Knowledge:
+        """Register and promote trusted system-test knowledge."""
         saved = original_register(self, project_id, knowledge, category)
         return self.canonicalize(project_id, saved.id)
 
