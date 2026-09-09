@@ -227,18 +227,13 @@ class TestKnowledgeFilterCurrent:
         assert [k.entity.status for k in kept] == ["CANONICAL"]
 
 
-class TestMcpSaveCurrent:
-    """MCP save write path (v1.2.0 characterization)."""
+class TestMcpSavePolicy:
+    """MCP save write path: observations are non-canonical by default."""
 
-    def test_save_schema_canonicalize_defaults_true(
+    def test_save_schema_canonicalize_defaults_false(
         self, tmp_path: Path
     ) -> None:
-        """v1.2.0: save schema declares canonicalize with default true.
-
-        Schema-level default true plus a handler that canonicalizes right
-        after register: an observation/save becomes CANONICAL unless the
-        caller explicitly opts out. Deviation KI-003 in ADR-001.
-        """
+        """The save schema makes trust promotion explicit and opt-in."""
         from hkos.mcp_server.tools import TOOLS
 
         save_schema: dict[str, Any] = {}
@@ -250,28 +245,28 @@ class TestMcpSaveCurrent:
         canonicalize = properties.get("canonicalize")
         assert canonicalize is not None, (
             "save schema must declare canonicalize")
-        assert canonicalize.get("default") is True
+        assert canonicalize.get("default") is False
 
-    def test_save_without_canonicalize_returns_canonical(
+    def test_save_without_canonicalize_returns_new(
         self, tmp_path: Path
     ) -> None:
-        """v1.2.0: MCP save (no canonicalize arg) returns status CANONICAL."""
+        """MCP save without an elevated action returns a NEW observation."""
         client = _McpClient(tmp_path / "mcp")
         try:
             result, is_error = client.call("save", {
                 "project": "P1",
-                "title": "mcp default canonical",
+                "title": "mcp default observation",
                 "body": "body",
             })
             assert not is_error, result
-            assert result["status"] == KNOWLEDGE_STATUS_CANONICAL
+            assert result["status"] == KNOWLEDGE_STATUS_NEW
         finally:
             client.close()
 
     def test_save_with_canonicalize_false_returns_new(
         self, tmp_path: Path
     ) -> None:
-        """v1.2.0: raw save call with canonicalize=false returns NEW."""
+        """Explicit canonicalize=false also returns a NEW observation."""
         client = _McpClient(tmp_path / "mcp")
         try:
             result, is_error = client.call("save", {

@@ -163,9 +163,11 @@ def tool_save(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
             warnings.extend(relation_warnings)
             knowledge.relations = valid
     registered = ctx.librarian.register(project.id, knowledge)
-    if args.get("canonicalize", True):
+    if args.get("canonicalize", False):
         ctx.librarian.canonicalize(project.id, registered.id)
-        ctx.index.update(project.id, registered.id, "knowledge")
+    # Index every observation. Ordinary retrieval still admits only CANONICAL;
+    # explicit include_history can inspect NEW observations.
+    ctx.index.update(project.id, registered.id, "knowledge")
     entity = ctx.repos.knowledge.load(project.id, registered.id)
     return {
         "id": entity.id,
@@ -293,7 +295,9 @@ TOOLS: list[dict[str, Any]] = [
         "name": "save",
         "description": (
             "Write a knowledge item through the Librarian (the only write "
-            "path), canonicalize it and index it. The deterministic "
+            "path) and index it as a NEW observation by default. Explicit "
+            "canonicalize=true is the elevated compatibility action. The "
+            "deterministic "
             "classifier may override the suggested category. Optional "
             "relations[] links this item to existing entities (typed edges); "
             "invalid links are dropped and the reasons are returned in the "
@@ -341,7 +345,14 @@ TOOLS: list[dict[str, Any]] = [
                                    "entities; invalid links are dropped "
                                    "with reasons in response warnings",
                 },
-                "canonicalize": {"type": "boolean", "default": True},
+                "canonicalize": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "elevated compatibility action; omitted/false keeps "
+                        "the saved item as a NEW observation"
+                    ),
+                },
             },
             "required": ["project", "title"],
         },
