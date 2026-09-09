@@ -36,6 +36,7 @@ class TestSnapshotBuilder:
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         lib.register(p.id, Knowledge(title="UDP fix", body="udp", tags=["udp"], confirmations=5))
         k = lib.register(p.id, Knowledge(title="Canonical", body="c", tags=["c"], confirmations=9))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         lib.register(p.id, Knowledge(title="Fail", body="f", kind="negative", tags=["f"]))
         index.build(p.id)

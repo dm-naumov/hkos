@@ -54,6 +54,7 @@ class TestContextBuilder:
     ) -> Project:
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         k1 = lib.register(p.id, Knowledge(title="TProxy UDP", body="udp tproxy", tags=["udp"]))
+        lib.verify(p.id, k1.id)
         lib.canonicalize(p.id, k1.id)
         lib.register(p.id, Knowledge(title="TUN fail", body="dns", kind="negative", tags=["tun"]))
         IndexEngine(repos, IndexStore(engine), HKOSLogger()).build(p.id)
