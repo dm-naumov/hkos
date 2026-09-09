@@ -57,7 +57,7 @@ class HermesProductionHooks:
         валидно. Ошибка -> исключение (НЕ ложный READY).
         """
         project_ids = [p.id for p in self._memory._projects.list()]
-        for project_id in project_ids[:1]:
+        for project_id in project_ids[:1]:  # выборочная проверка
             self._index.statistics(project_id)
         return {
             "ready": True,
@@ -82,8 +82,12 @@ class HermesProductionHooks:
         Возвращает bundle: project/campaign/snapshot_used/retrieval_items/
         context/optimized/tokens (до/после) + reduction.
         """
+        # retry-семантика: сброс фолбэк-защёлки (DS-012) перед попыткой —
+        # восстановление после сбоя не требует пересоздания контекста
         if hasattr(self._memory, "reset_fallbacks"):
             self._memory.reset_fallbacks()
+        # DS-017: get_or_create_campaign под AgentLock WRITE — исключение
+        # гонок concurrent create (5 агентов x N -> одна логическая кампания).
         if self._lock is not None:
             self._lock.acquire(LOCK_MODE_WRITE)
         try:
