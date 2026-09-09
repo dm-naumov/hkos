@@ -138,6 +138,7 @@ class TestMcpServerProtocol:
                 "body": "meta l4proto tcp redirect to :12345",
                 "tags": ["tcp", "nftables"],
                 "kind": "fact",
+                "canonicalize": True,
             })
             assert not is_error
             assert saved["status"] == "CANONICAL"
@@ -148,6 +149,7 @@ class TestMcpServerProtocol:
                 "title": "UDP bypasses the proxy",
                 "body": "cause: tcp-only rule; fix: add tproxy rule",
                 "kind": "negative",
+                "canonicalize": True,
             })
             assert not is_error
             assert negative["category"] == "FAILURE"  # classifier override
@@ -323,7 +325,8 @@ class TestMcpSdkInterop:
                         {"project": "SdkDemo",
                          "title": "SDK interop works",
                          "body": "end-to-end via official client",
-                         "tags": ["sdk"]},
+                         "tags": ["sdk"],
+                         "canonicalize": True},
                     )
                     result = await session.call_tool(
                         "retrieve", {"project": "SdkDemo", "query": "sdk"})
