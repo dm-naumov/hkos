@@ -1,50 +1,39 @@
-"""HKOS Knowledge Filter (DS-008 §11, IP-008)
-==========================================
-По умолчанию исключаются Knowledge со статусами:
+"""Knowledge eligibility policy for ordinary HKOS retrieval.
 
-    ARCHIVED, REJECTED, SUPERSEDED
-
-если пользователь явно не запросил исторические данные
-(include_history / constraint запроса).
+Ordinary retrieval admits only CANONICAL Knowledge. Non-canonical Knowledge
+is available only through the explicit ``include_history`` policy. Entities
+outside the Knowledge lifecycle are not filtered here.
 """
 
 from hkos.retrieval.ranking_engine import RankedCandidate
-from hkos.services.librarian.knowledge_status import (
-    KNOWLEDGE_STATUS_ARCHIVED,
-    KNOWLEDGE_STATUS_REJECTED,
-    KNOWLEDGE_STATUS_SUPERSEDED,
-)
+from hkos.services.librarian.knowledge_status import KNOWLEDGE_STATUS_CANONICAL
 
 __all__ = ["KnowledgeFilter"]
 
 
 class KnowledgeFilter:
-    """Фильтрация кандидатов по статусам (без изменения сущностей)."""
+    """Apply the explicit Knowledge eligibility policy without mutation."""
 
     @staticmethod
+    def is_eligible(
+        candidate: RankedCandidate,
+        include_history: bool = False,
+    ) -> bool:
+        """Return whether a candidate may enter the requested result policy."""
+        if candidate.entity_type != "knowledge":
+            return True
+        if include_history:
+            return True
+        return candidate.entity.status == KNOWLEDGE_STATUS_CANONICAL
+
+    @classmethod
     def filter(
+        cls,
         ranked: list[RankedCandidate],
         include_history: bool = False,
     ) -> list[RankedCandidate]:
-        """Отфильтровать архивные/отклонённые/замещённые знания.
-
-        Args:
-            ranked: Ранжированные кандидаты.
-            include_history: Включить исторические статусы.
-
-        Returns:
-            Отфильтрованный список (порядок сохранён).
-
-        """
-        if include_history:
-            return ranked
+        """Keep eligible candidates while preserving their order."""
         return [
-            candidate
-            for candidate in ranked
-            if candidate.entity.status
-            not in (
-                KNOWLEDGE_STATUS_ARCHIVED,
-                KNOWLEDGE_STATUS_REJECTED,
-                KNOWLEDGE_STATUS_SUPERSEDED,
-            )
+            candidate for candidate in ranked
+            if cls.is_eligible(candidate, include_history)
         ]

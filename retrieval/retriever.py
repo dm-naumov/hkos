@@ -106,10 +106,9 @@ class Retriever:
             snapshot=snapshot, refine_limit=refine_limit,
         )
 
-        # 4. Knowledge Filter
-        filtered = self._filter.filter(
-            ranked, include_history or parsed.include_history
-        )
+        # 4. Knowledge eligibility for direct candidates
+        include_noncanonical = include_history or parsed.include_history
+        filtered = self._filter.filter(ranked, include_noncanonical)
 
         # 5. Relationship Traverser (Q4, снимок индекса; кросс-проектные
         #    цели через snapshot_provider — DS-017 v1.2)
@@ -118,8 +117,12 @@ class Retriever:
             snapshot_provider=snapshot_provider,
         )
 
+        # Relation expansion is a candidate source, not an eligibility
+        # bypass: apply the exact same policy to every added neighbor.
+        eligible = self._filter.filter(expanded, include_noncanonical)
+
         # 6. Knowledge Selector (Top N)
-        selected = self._selector.select(expanded, top_n or 0)
+        selected = self._selector.select(eligible, top_n or 0)
         return selected
 
     def run_search(

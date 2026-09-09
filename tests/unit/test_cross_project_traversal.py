@@ -50,8 +50,9 @@ class CrossProjectFixture:
             a_pid, Knowledge(
                 title="tcp window scaling breaks nat", body="fact about mtu",
                 tags=["mtu"]))
+        self.librarian.canonicalize(a_pid, fact.id)
         self.index.build(a_pid)
-        self.librarian.register(
+        decision = self.librarian.register(
             b_pid, Knowledge(
                 title="disable tcp window scaling",
                 body="decision fixes mtu issue",
@@ -62,6 +63,7 @@ class CrossProjectFixture:
                     target_id=fact.id,
                     target_project_id=a_pid,
                 )]))
+        self.librarian.canonicalize(b_pid, decision.id)
         self.index.build(b_pid)
         return a_pid, b_pid
 
