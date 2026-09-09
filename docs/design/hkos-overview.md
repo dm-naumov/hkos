@@ -87,6 +87,14 @@ knowledge; the write path is register → validate → canonicalize.
 **Why:** a single write path makes validation, classification and lifecycle
 rules enforceable by construction, not by convention.
 
+## Knowledge integrity contract
+
+The target contract for lifecycle status, retrieval eligibility and the
+agent write path (observation vs verification vs canonicalization, graph
+eligibility, single status vocabulary) is defined in
+[ADR-001](adr-001-knowledge-integrity-contract.md); v1.2.0 tracks known
+deviations (KI-001…KI-009) with tests.
+
 ## Non-goals (explicitly out of scope for v1.0)
 
 - Semantic/embedding search (optional backend planned for v1.1, SSOT untouched).
