@@ -39,6 +39,42 @@ class TestSnapshotDiff:
         result = SnapshotDiff().diff(a, b)
         assert result.modified == ["k1"]
 
+    def test_modified_body_only(self) -> None:
+        """Изменение body без изменения title должно давать Modified."""
+        a = _snapshot(
+            {"Canonical Knowledge": [{"id": "k1", "title": "A", "body": "old body"}]}
+        )
+        b = _snapshot(
+            {"Canonical Knowledge": [{"id": "k1", "title": "A", "body": "new body"}]}
+        )
+        result = SnapshotDiff().diff(a, b)
+        assert result.modified == ["k1"]
+        assert result.unchanged == []
+
+    def test_modified_content_only(self) -> None:
+        """Изменение content (alias for body) без изменения title → Modified."""
+        a = _snapshot(
+            {"Canonical Knowledge": [{"id": "k1", "title": "A", "content": "v1"}]}
+        )
+        b = _snapshot(
+            {"Canonical Knowledge": [{"id": "k1", "title": "A", "content": "v2"}]}
+        )
+        result = SnapshotDiff().diff(a, b)
+        assert result.modified == ["k1"]
+        assert result.unchanged == []
+
+    def test_unchanged_when_body_identical(self) -> None:
+        """Одинаковые title + body → Unchanged."""
+        a = _snapshot(
+            {"Canonical Knowledge": [{"id": "k1", "title": "A", "body": "same"}]}
+        )
+        b = _snapshot(
+            {"Canonical Knowledge": [{"id": "k1", "title": "A", "body": "same"}]}
+        )
+        result = SnapshotDiff().diff(a, b)
+        assert result.unchanged == ["k1"]
+        assert result.modified == []
+
     def test_section_changes(self) -> None:
         a = _snapshot({"Canonical Knowledge": []})
         b = _snapshot({"Accepted Decisions": [{"id": "d1", "title": "D"}]})
