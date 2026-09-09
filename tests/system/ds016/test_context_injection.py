@@ -33,6 +33,7 @@ class TestContextInjection:
         project = ctx.project.create(name="Ctx", tags=["hermes"])
         k = ctx.librarian.register(project.id, Knowledge(
             title="CtxFact udp", body="udp", tags=["udp"]))
+        ctx.librarian.verify(project.id, k.id)
         ctx.librarian.canonicalize(project.id, k.id)
         ctx.index.build(project.id)
         bundle = ctx.retrieve_before_task(
@@ -89,6 +90,7 @@ class TestContextInjection:
                 "hkos.repository.models", fromlist=["Knowledge"]).Knowledge(
                     title=f"R{i}fact udp", body="udp engineering " * 5,
                     tags=["udp"]))
+            ctx.librarian.verify(project.id, k.id)
             ctx.librarian.canonicalize(project.id, k.id)
         ctx.index.build(project.id)
         bundle = ctx.retrieve_before_task("udp", project_id=project.id)
