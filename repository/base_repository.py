@@ -16,6 +16,7 @@ import uuid
 from typing import Any, Generic, TypeVar
 
 from hkos.repository.exceptions import (
+    RepositoryConcurrencyError,
     RepositoryError,
     RepositoryNotFoundError,
     RepositoryParseError,
@@ -27,6 +28,10 @@ from hkos.storage.storage_engine import StorageEngine
 __all__ = ["BaseRepository"]
 
 T = TypeVar("T")
+
+# Ключ счётчика ревизий в конверте HKOS-08.
+# Не пересекается с KEY_VERSION (версия формата конверта, всегда = 1).
+_REVISION_KEY: str = "_rev"
 
 
 class BaseRepository(Generic[T]):
@@ -132,7 +137,11 @@ class BaseRepository(Generic[T]):
         return self._from_data(doc)
 
     def _envelope(self, entity: T, existing: dict[str, Any] | None) -> dict[str, Any]:
-        """Собрать конверт HKOS-08, сохранив created_at/version документа."""
+        """Собрать конверт HKOS-08, сохранив created_at/version и инкрементировав _rev.
+
+        KEY_VERSION — версия формата конверта HKOS-08, никогда не инкрементируется.
+        _REVISION_KEY (_rev) — счётчик ревизий документа, растёт с каждым сохранением.
+        """
         doc = self._json.create_envelope(
             self._to_data(entity), self._type_name
         )
@@ -143,6 +152,11 @@ class BaseRepository(Generic[T]):
             doc[self._json.KEY_VERSION] = existing.get(
                 self._json.KEY_VERSION, doc[self._json.KEY_VERSION]
             )
+            # Инкрементируем счётчик ревизий (старые документы без _rev начинают с 0).
+            current_rev = existing.get(_REVISION_KEY, 0)
+            doc[_REVISION_KEY] = (int(current_rev) if isinstance(current_rev, int) else 0) + 1
+        else:
+            doc[_REVISION_KEY] = 1
         return doc
 
     # --- Публичный интерфейс (DS-003 §6) ---
@@ -151,7 +165,7 @@ class BaseRepository(Generic[T]):
         """Сохранить объект; при отсутствии id — назначить UUID один раз.
 
         Повторное сохранение не повреждает данные: сохраняются
-        created_at и version существующего документа.
+        created_at и version существующего документа, _rev инкрементируется.
         """
         eid = self._entity_id(entity)
         project = self._project_of(entity)
@@ -171,13 +185,20 @@ class BaseRepository(Generic[T]):
         """
         return self._parse_doc(self._read_doc(project, object_id), object_id)
 
-    def update(self, entity: T) -> T:
+    def update(self, entity: T, expected_revision: int | None = None) -> T:
         """Обновить существующий объект.
 
-        UUID не изменяется; created_at и version сохраняются.
+        UUID не изменяется; created_at и version сохраняются; _rev инкрементируется.
+
+        Args:
+            entity: Объект с заполненным id.
+            expected_revision: Ожидаемый номер ревизии (для оптимистичной блокировки).
+                None — проверка не выполняется (обратная совместимость).
 
         Raises:
             RepositoryNotFoundError: Если объекта нет или id не задан.
+            RepositoryConcurrencyError: Если expected_revision задан
+                и не совпадает с текущей ревизией документа.
 
         """
         eid = getattr(entity, "id")
@@ -187,10 +208,31 @@ class BaseRepository(Generic[T]):
             )
         project = self._project_of(entity)
         existing = self._read_doc(project, eid)
+        if expected_revision is not None:
+            actual_rev = existing.get(_REVISION_KEY, 0)
+            if actual_rev != expected_revision:
+                raise RepositoryConcurrencyError(
+                    f"{self._type_name} '{eid}' was modified concurrently: "
+                    f"expected revision {expected_revision}, "
+                    f"found {actual_rev}"
+                )
         path = self._file_path(project, eid)
         self._storage.mkdir(os.path.dirname(path))
         self._storage.write_json(path, self._envelope(entity, existing))
         return entity
+
+    def get_revision(self, project: str, object_id: str) -> int:
+        """Вернуть текущий счётчик ревизий (для оптимистичной блокировки).
+
+        Документы без _rev (созданные до KI-008) возвращают 0.
+
+        Raises:
+            RepositoryNotFoundError: Если объект отсутствует.
+
+        """
+        doc = self._read_doc(project, object_id)
+        rev = doc.get(_REVISION_KEY, 0)
+        return int(rev) if isinstance(rev, int) else 0
 
     def delete(self, project: str, object_id: str) -> None:
         """Удалить объект.
