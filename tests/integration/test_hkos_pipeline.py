@@ -56,10 +56,13 @@ class _Persistence:
 
 
 def _llm_mock(context: object) -> str:
+    """Мок ответа LLM по контексту."""
     return "task completed"
 
 
 class _Harness:
+    """Полная композиция HKOS для E2E pipeline."""
+
     def __init__(self, tmp_path: Path):
         cfg = ConfigLoader(profile="development")
         cfg.load()
@@ -90,6 +93,8 @@ class _Harness:
 
 
 class _ProbeEngine:
+    """Локальный двойник MigrationEngine (без кросс-импортов тестов)."""
+
     def __init__(self) -> None:
         self.failed = False
 
@@ -123,6 +128,8 @@ class _ProbeEngine:
 
 
 class TestE2EPipeline:
+    """Полный жизненный цикл задачи: User -> Hermes -> ... -> Snapshot."""
+
     def test_full_pipeline_order(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
@@ -130,9 +137,12 @@ class TestE2EPipeline:
         order: list[str] = []
 
         def recorder(name: str, fn: object) -> object:
+            """Обёртка: фиксирует порядок вызова, делегирует оригиналу."""
+
             def wrapper(*args: object, **kwargs: object) -> object:
                 order.append(name)
                 return fn(*args, **kwargs)  # type: ignore[operator]
+
             return wrapper
 
         targets = [
@@ -178,6 +188,7 @@ class TestE2EPipeline:
         project = h.projects.create(name="OpenWrt", tags=["router"])
         k = h.librarian.register(project.id, Knowledge(
             title="UDP works", body="udp routing fix", tags=["udp"]))
+        h.librarian.verify(project.id, k.id)
         h.librarian.canonicalize(project.id, k.id)
         h.index.update(project.id, k.id, "knowledge")
         prepared = h.memory.prepare_context(
@@ -198,6 +209,8 @@ class TestE2EPipeline:
 
 
 class TestMemoryService:
+    """prepare_context / save_results (DS-012 ЭТАП 5 §2)."""
+
     def test_prepare_context_components(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         prepared = h.memory.prepare_context(
@@ -232,6 +245,8 @@ class TestMemoryService:
 
 
 class TestProjectCampaignFlow:
+    """Новый/существующий проект; активная кампания; запрет без проекта."""
+
     def test_new_project_created(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.memory.resolve_project(project_name="BrandNew")
@@ -265,6 +280,8 @@ class TestProjectCampaignFlow:
 
 
 class TestSnapshotFlow:
+    """Snapshot есть -> контекст с ним; нет -> без ошибок."""
+
     def test_with_snapshot(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -284,6 +301,8 @@ class TestSnapshotFlow:
 
 
 class TestFailureKnowledge:
+    """Задача с ошибкой -> Knowledge FAILURE; retrieval находит."""
+
     def test_failure_knowledge_saved_and_retrievable(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -292,7 +311,9 @@ class TestFailureKnowledge:
             body="problem: tproxy failed\ncause: missing nft rule\n"
                  "actions: added rule\nresult: still broken\n"
                  "recommendations: use redirect instead",
-            kind="negative", tags=["tproxy", "failure"])
+            kind="negative",
+            tags=["tproxy", "failure"],
+        )
         result = h.memory.save_results(
             agent_id="a", project_id=project.id, failures=[failure])
         assert len(result.failures) == 1
@@ -306,6 +327,8 @@ class TestFailureKnowledge:
 
 
 class TestMultiAgent:
+    """3 агента (Planner/Executor/Reviewer) на одном HKOS (DS-012 §6)."""
+
     def test_shared_memory_and_audit(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -320,20 +343,27 @@ class TestMultiAgent:
         audit.log("KNOWLEDGE_WRITTEN", planner.agent_id, "knowledge.save",
                   project.id, "", "ok")
         assert len(saved.saved) == 1
+        h.librarian.verify(project.id, saved.saved[0])
         h.librarian.canonicalize(project.id, saved.saved[0])
         found = h.retrieval.retrieve("Planner fact", project_id=project.id)
         assert len(found.items) >= 1
         executor_saved = h.memory.save_results(
             agent_id=executor.agent_id, project_id=project.id,
             knowledge=[Knowledge(title="Executor fact", body="exec udp", tags=["udp"])])
+        h.librarian.verify(project.id, executor_saved.saved[0])
         h.librarian.canonicalize(project.id, executor_saved.saved[0])
         found = h.retrieval.retrieve("Executor fact", project_id=project.id)
         assert len(found.items) >= 1
         assert any(e.agent_id == "planner" for e in audit.entries())
+        assert len(audit.entries()) >= 1
 
 
 class TestSecurityE2E:
+    """Security boundary E2E (DS-012 ЭТАП 5 §7)."""
+
     def test_write_without_permission_blocked(self, tmp_path: Path) -> None:
+        from hkos.integration.hermes.schemas import MigrationErrorResponse
+
         engine = _ProbeEngine()
         tools = MigrationTools(engine)  # type: ignore[arg-type]
         agent = AgentContext(agent_id="agent-1")
@@ -351,6 +381,7 @@ class TestSecurityE2E:
 
     def test_admin_with_confirmation_passes(self, tmp_path: Path) -> None:
         from hkos.integration.hermes.schemas import MigrationOperationResponse
+
         engine = _ProbeEngine()
         tools = MigrationTools(engine)  # type: ignore[arg-type]
         agent = AgentContext(agent_id="admin", project_id="p1")
@@ -374,6 +405,8 @@ class TestSecurityE2E:
 
 
 class TestFallbackE2E:
+    """Graceful degradation (DS-012 ЭТАП 5 §8)."""
+
     def test_retrieval_unavailable_continues(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -411,30 +444,37 @@ class TestFallbackE2E:
 
 
 class TestPipelinePerformance:
+    """Бюджеты производительности (DS-012 ЭТАП 5 §9)."""
+
     def test_pipeline_budgets(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
         h.librarian.register(project.id, Knowledge(
             title="UDP works", body="udp fix", tags=["udp"]))
         h.index.build(project.id)
+
         start = time.monotonic()
         h.memory.resolve_project(project_id=project.id)
         resolve_ms = (time.monotonic() - start) * 1000
         assert resolve_ms <= 20, f"project resolver {resolve_ms:.1f} ms"
+
         start = time.monotonic()
         result = h.retrieval.retrieve("udp", project_id=project.id)
         retrieval_ms = (time.monotonic() - start) * 1000
         assert retrieval_ms <= 100, f"retrieval {retrieval_ms:.1f} ms"
+
         start = time.monotonic()
         h.context.build(result, project.id)
         context_ms = (time.monotonic() - start) * 1000
-        assert context_ms <= 200, f"context build {context_ms:.1f} ms"
+        assert context_ms <= 200, f"context {context_ms:.1f} ms"
+
         start = time.monotonic()
         h.memory.save_results(
             agent_id="a", project_id=project.id,
             knowledge=[Knowledge(title="New", body="new", tags=["n"])])
         save_ms = (time.monotonic() - start) * 1000
         assert save_ms <= 150, f"save {save_ms:.1f} ms"
+
         start = time.monotonic()
         h.memory.prepare_context(agent_id="a", query="udp", project_id=project.id)
         total_ms = (time.monotonic() - start) * 1000
