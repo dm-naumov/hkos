@@ -108,18 +108,10 @@ class ContractFixture:
 class TestDefaultEligibility:
     """Target: ordinary retrieval eligibility admits CANONICAL only."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "KNOWN-DEVIATION KI-001: default filter keeps NEW/VERIFIED/"
-            "CONFLICT besides CANONICAL"
-        ),
-    )
     def test_filter_admits_only_canonical(self, tmp_path: Path) -> None:
         """KI-001: default eligibility keeps only CANONICAL.
 
-        Current v1.2.0 KnowledgeFilter excludes only
-        ARCHIVED/REJECTED/SUPERSEDED and keeps NEW/VERIFIED/CONFLICT.
+        The policy is expressed as a positive allowlist, not a denylist.
         """
         fx = ContractFixture(tmp_path)
         kept = KnowledgeFilter.filter([
@@ -128,30 +120,18 @@ class TestDefaultEligibility:
         ])
         assert [k.entity.status for k in kept] == [KNOWLEDGE_STATUS_CANONICAL]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="KNOWN-DEVIATION KI-001: VERIFIED passes the default filter",
-    )
     def test_verified_not_admitted(self, tmp_path: Path) -> None:
         """KI-001: VERIFIED is not admitted by default eligibility."""
         fx = ContractFixture(tmp_path)
         kept = KnowledgeFilter.filter([fx._candidate("VERIFIED")])
         assert kept == []
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="KNOWN-DEVIATION KI-001: CONFLICT passes the default filter",
-    )
     def test_conflict_not_admitted(self, tmp_path: Path) -> None:
         """KI-001: CONFLICT is not admitted by default eligibility."""
         fx = ContractFixture(tmp_path)
         kept = KnowledgeFilter.filter([fx._candidate("CONFLICT")])
         assert kept == []
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="KNOWN-DEVIATION KI-001: NEW reaches ordinary retrieval",
-    )
     def test_new_not_in_ordinary_retrieval(self, tmp_path: Path) -> None:
         """KI-001: a NEW knowledge is not returned by ordinary retrieval."""
         fx = ContractFixture(tmp_path)
@@ -165,13 +145,6 @@ class TestDefaultEligibility:
 class TestGraphEligibility:
     """Target: graph traversal cannot bypass eligibility."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "KNOWN-DEVIATION KI-002: traverser adds candidates after the "
-            "main filter without a second eligibility pass"
-        ),
-    )
     def test_archived_relation_target_not_retrieved(
         self, tmp_path: Path
     ) -> None:
