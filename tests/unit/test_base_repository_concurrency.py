@@ -7,6 +7,7 @@
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -37,7 +38,7 @@ class TestBaseRepositoryConcurrency:
         )
         return repo, "proj-1"
 
-    def _raw_doc(self, repo: KnowledgeRepository, project: str, oid: str) -> dict:
+    def _raw_doc(self, repo: KnowledgeRepository, project: str, oid: str) -> dict[str, Any]:
         """Read the raw JSON envelope from disk without going through _from_data."""
         path = repo._file_path(project, oid)
         return repo.storage.read_json(path)
@@ -128,11 +129,9 @@ class TestBaseRepositoryConcurrency:
         repo, project = self._repo(tmp_path)
         k = repo.create(Knowledge(project=project, title="G"))
 
-        # Первая запись без блокировки
         k.confidence = 10
         repo.update(k)  # _rev = 2
 
-        # Вторая запись без expected_revision — не должна падать
         k.confidence = 20
         repo.update(k, expected_revision=None)  # явно: None = нет проверки
 
