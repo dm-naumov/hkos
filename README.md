@@ -3,7 +3,7 @@
 [![CI](https://github.com/dm-naumov/hkos/actions/workflows/ci.yml/badge.svg)](https://github.com/dm-naumov/hkos/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-987%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-1%2C000%2B-brightgreen.svg)]()
 [![mypy](https://img.shields.io/badge/mypy-strict-2ea44f.svg)]()
 [![ruff](https://img.shields.io/badge/ruff-0%20functional%20findings-2ea44f.svg)]()
 
@@ -12,8 +12,9 @@
 HKOS is a long-lived, object-oriented knowledge database designed to store and
 structure engineering memory **independently of any LLM**. Knowledge is written
 through a single canonical path, indexed locally, retrieved with a bounded
-query contract, and snapshotted — all in plain JSON files, with no daemon, no
-external services, and no embeddings.
+query contract, and snapshotted. The canonical Repository remains plain JSON;
+derived indexes may use JSON or SQLite. No daemon, external service, or
+embedding model is required.
 
 > **Deterministic by design.** The classification, indexing, retrieval and
 > lifecycle logic contains zero LLM calls. Your memory survives model swaps,
@@ -101,10 +102,15 @@ a maintenance layer on top; `performance/` measures but never mutates.
 5. **Schema evolution is a first-class operation.** A migration FSM
    (backup → apply → rebuild index → regenerate snapshot → validate) with an
    append-only event log and idempotent rollback.
-6. **No daemon, no global state, no hidden databases.** HKOS is a library;
-   everything is files and injected dependencies (constructor DI).
+6. **No daemon, no global state, no hidden authoritative database.** HKOS
+   is a library built around files and injected dependencies (constructor DI);
+   the optional SQLite index is a rebuildable projection, never the SSOT.
 
 ## Knowledge lifecycle
+
+The diagram below is the target contract defined by
+[`ADR-001`](docs/design/adr-001-knowledge-integrity-contract.md). Known v1.2
+deviations are executable XFAIL contracts and will be removed during v1.3.
 
 ```
 register ──► NEW ──► VERIFIED ──► CANONICAL ──► ARCHIVED
@@ -199,9 +205,9 @@ Measured on a stock Linux workstation, corpus generated deterministically
 
 ## Quality
 
-- **987 unit + integration tests** (plus system-level scenarios — pipeline,
-  lifecycle, growth, consistency, failure recovery, concurrent agents,
-  migration, security, stress).
+- **1,000+ automated tests** across unit, integration, architecture, and
+  system suites (pipeline, lifecycle, consistency, failure recovery,
+  concurrent agents, migration, security, and stress).
 - **mypy --strict: 0 errors** across 453 files.
 - **ruff: 0 functional findings** (docstring style only).
 - **compileall: clean.**
@@ -283,7 +289,10 @@ anything that speaks MCP.
   LangChain/AutoGen), Failure-Priority ranking.
 - **v1.2 (released)** — SQLite index backend (delta writes, `hkos migrate`,
   same API), cross-project relationship traversal (deterministic, via Q4).
-- **Next** — semantic search as an *optional* backend (SSOT untouched), FTS5.
+- **Next: v1.3** — Knowledge Integrity contract implementation
+  ([ADR-001](docs/design/adr-001-knowledge-integrity-contract.md)).
+- **Later** — optional semantic candidate providers; the Repository remains
+  the SSOT and deterministic retrieval remains available.
 
 ## License
 
@@ -291,7 +300,7 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-*HKOS was developed in 15 certified sprints (DS-001…DS-015) with a documented
-engineering process: architecture reviews, adversarial audits, performance
+*HKOS was developed through a certified sprint sequence (DS-001…DS-017)
+with a documented engineering process: architecture reviews, adversarial audits, performance
 budgets, and system-level qualification. Design decisions are documented in
 [`docs/design/`](docs/design/).*

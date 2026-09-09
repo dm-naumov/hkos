@@ -9,21 +9,26 @@ from pathlib import Path
 
 import yaml
 
+from hkos.core.version import VersionManager
 from hkos.performance.performance_manager import PerformanceManager
 from hkos.repository.models import Knowledge
 from tests.system.ds015.fixtures import create_ds015_context
 
 _REPO = Path(__file__).resolve().parents[3]
 CONFIG_PROD = _REPO / "config" / "hkos-production.yaml"
+VERSION_FILE = _REPO / "VERSION"
 
 
 class TestReleaseCandidate:
-    """Готовность релиза 1.0."""
+    """Готовность текущего релиза."""
 
     def test_version_and_config(self) -> None:
         config = yaml.safe_load(CONFIG_PROD.read_text())
-        version = config["hkos"]["version"]
-        assert version.startswith("1.0"), f"version {version}"
+        expected = VERSION_FILE.read_text(encoding="utf-8").strip()
+        configured = str(config["hkos"]["version"])
+        assert configured == expected, (
+            f"production config version {configured!r} != VERSION {expected!r}")
+        assert VersionManager().version_string == expected
         assert config["hkos"]["enabled"] is True
 
     def test_migration_scripts_available(self) -> None:

@@ -2,6 +2,13 @@
 
 ## [1.2.0] — 2026-09-08 (feature release, DS-017 v1.2)
 
+### Maintenance — release consistency
+
+- Synchronized active release metadata and roadmap with v1.2.0.
+- Clarified that SQLite is a derived index/query backend while the JSON
+  Repository remains the SSOT.
+- Added a CI architecture gate for version and active-document consistency.
+
 ### Added — SQLite index backend (IP-017-v1.2, ЭТАПЫ 1–3)
 
 - `SqliteIndexStore`: second official Index Layer backend — one

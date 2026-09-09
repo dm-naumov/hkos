@@ -1,13 +1,13 @@
 {
-  "version": "1.0.0-prod",
-  "status": "RELEASE_CANDIDATE",
-  "build_date": "2026-08-07",
+  "version": "1.2.0",
+  "status": "RELEASED",
+  "build_date": "2026-09-08",
   "components": {
     "core": "config/logger/version/health",
     "storage": "StorageEngine/JSONStore (HKOS-08 envelopes)",
     "repository": "RepositoryManager/BaseRepository (SSOT)",
-    "index": "IndexEngine/QueryContract Q1-Q5/IndexCache",
-    "retrieval": "RetrievalEngine (candidates/ranking/filter/explain)",
+    "index": "IndexEngine/Query Contract Q1-Q5/JSON and SQLite index backends/IndexCache",
+    "retrieval": "RetrievalEngine (deterministic candidates/ranking/filter/explain/cross-project traversal)",
     "context": "ContextBuilder/ContextDocument/SnapshotLoader",
     "snapshot": "SnapshotEngine (derived; classification via policy)",
     "services": "Project/Campaign/Librarian/MemoryService/classification_policy",
@@ -17,10 +17,8 @@
     "kernel": "SnapshotDocument"
   },
   "tests": {
-    "unit": "807",
-    "integration": "112",
-    "system": "57 (ds014 51 + ds015 54 + signoff 18)",
-    "total": "~990"
+    "policy": "Current counts are enforced by CI; release notes preserve historical exact counts",
+    "total": "1000+"
   },
   "documents": {
     "DS-001": "FOUNDATION",
@@ -37,7 +35,9 @@
     "DS-012": "HERMES INTEGRATION",
     "DS-013": "PERFORMANCE LAYER",
     "DS-014": "SYSTEM TESTS",
-    "DS-015": "PRODUCTION READINESS"
+    "DS-015": "PRODUCTION READINESS",
+    "DS-016": "HERMES PRODUCTION INTEGRATION",
+    "DS-017": "SQLITE INDEX + CROSS-PROJECT GRAPH"
   },
   "ds_status": {
     "DS-001..DS-010": "CERTIFIED (audits A/A/B/B/B, 0 blockers)",
@@ -45,9 +45,11 @@
     "DS-012": "COMPLETED",
     "DS-013": "COMPLETED (manifest/cache/perf layer)",
     "DS-014": "COMPLETED (system qualification)",
-    "DS-015": "COMPLETED (production readiness)"
+    "DS-015": "COMPLETED (production readiness)",
+    "DS-016": "COMPLETED",
+    "DS-017": "COMPLETED (v1.2.0)"
   },
-  "production_config_version": "1.0.0-prod",
+  "production_config_version": "1.2.0",
   "known_scale_characteristics": {
     "100k_cold_retrieval": "parse O(index) ~1.1 s; warm 0.1 ms via IndexCache",
     "1m_stress": "dedicated window (HKOS_STRESS_SCALE=1000000)",

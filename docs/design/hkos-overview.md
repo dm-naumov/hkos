@@ -44,10 +44,11 @@ knowledge and ranked *first* when a similar problem is queried.
 it". Retrieval that surfaces past failures before repeating them turns memory
 into a safety mechanism, not just a lookup.
 
-## 4. File-based storage, no daemon
+## 4. File-based SSOT, no daemon
 
-**Decision:** HKOS is a library. Everything is files (JSON envelopes,
-HKOS-08); there is no server, no daemon, no hidden database.
+**Decision:** HKOS is a library. The canonical Repository uses file-based JSON
+envelopes (HKOS-08); there is no server, daemon, or hidden authoritative
+database. The optional SQLite index is a rebuildable projection.
 
 **Why:** zero operational footprint, trivially backupable/restorable (a
 directory copy), diffable, and process-independent — memory survives the
@@ -97,6 +98,6 @@ deviations (KI-001…KI-009) with tests.
 
 ## Non-goals (explicitly out of scope for v1.0)
 
-- Semantic/embedding search (optional backend planned for v1.1, SSOT untouched).
+- Semantic/embedding retrieval (a future optional candidate provider; SSOT untouched).
 - Event bus, graph engine as core features (documented as future extensions).
 - Multi-writer concurrency within one process (AgentLock serializes writers).

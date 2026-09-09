@@ -5,7 +5,6 @@
 """
 
 import inspect
-import os
 from pathlib import Path
 
 from hkos.index import IndexEngine, IndexQueryExecutor
@@ -63,16 +62,20 @@ class TestApiContracts:
         assert not {"list", "walk", "scan"} & methods  # нет прямого доступа
 
     def test_no_nonexistent_api_in_docs(self) -> None:
-        """Запрещённые/несуществующие API не упоминаются в документации."""
-        docs_dir = str(Path(__file__).resolve().parents[3] / "docs")
-        forbidden = [
-            "event bus", "event sourcing", "Graph Search", "Memory DB",
-            "vector database", "SQLite backend",
-        ]
-        for name in os.listdir(docs_dir):
-            if not name.endswith(".md"):
-                continue
-            content = open(os.path.join(docs_dir, name), encoding="utf-8").read()
-            for term in forbidden:
-                assert term.lower() not in content.lower(), (
-                    f"{name}: mentions nonexistent {term!r}")
+        """Docs distinguish implemented index backends from nonexistent APIs."""
+        docs_dir = Path(__file__).resolve().parents[3] / "docs"
+        documents = {
+            path.name: path.read_text(encoding="utf-8")
+            for path in docs_dir.glob("*.md")
+        }
+        combined = "\n".join(documents.values()).lower()
+        for term in ("event bus", "event sourcing", "Graph Search",
+                     "Memory DB", "vector database"):
+            assert term.lower() not in combined, (
+                f"active docs mention nonexistent {term!r}")
+
+        architecture = documents["architecture.md"].lower()
+        assert "repository is the single source of truth" in architecture
+        assert "sqlite" in architecture and "index" in architecture
+        assert "sqlite storage backend" not in combined, (
+            "SQLite is an index/query backend, not the Repository SSOT")
