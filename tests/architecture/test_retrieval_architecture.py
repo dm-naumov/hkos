@@ -134,6 +134,7 @@ class TestRetrievalArchitecture:
                     title=f"UDP topic {i}", body=f"udp {i}", tags=["udp"]
                 ),
             )
+            lib.verify(p.id, knowledge.id)
             lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         rv = RetrievalEngine(repos, IndexQueryExecutor(IndexStore(engine)), cfg, HKOSLogger())
