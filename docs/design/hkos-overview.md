@@ -83,7 +83,7 @@ weights come from configuration, never from the code, and are auditable.
 ## 8. The Librarian is the only write path
 
 **Decision:** no component except the Librarian can create or mutate
-knowledge; the write path is register → validate → canonicalize.
+knowledge; the write path is register → verify → canonicalize.
 
 **Why:** a single write path makes validation, classification and lifecycle
 rules enforceable by construction, not by convention.

@@ -17,7 +17,7 @@ core <- storage <- repository <- index <- retrieval/context/snapshot
 - **retrieval**: RetrievalEngine (query → candidates → ranking → explanation); reads ONLY the index and the repository by UUID. RelationshipTraverser (Q4) обходит связи; кросс-проектные цели (`target_project_id`) — через снапшоты целевых проектов (детерминированный BFS, DS-017 v1.2).
 - **context**: ContextBuilder (task/project/campaign/snapshot → ContextDocument); SnapshotLoader.
 - **snapshot**: SnapshotEngine (create/load/history) — a derived representation of the repository (classification via the entity index + classification_policy).
-- **services**: ProjectManager, CampaignManager (FSM), Librarian (register/update/canonicalize/archive/restore/reject/validate), MemoryService (full-cycle orchestration), classification_policy (single source of categories).
+- **services**: ProjectManager, CampaignManager (FSM), Librarian (register/update/verify/canonicalize/archive/restore/reject/validate), MemoryService (full-cycle orchestration), classification_policy (single source of categories).
 - **migration**: MigrationEngine (7 methods) → MigrationManager (FSM) + Registry/Detector/Executor/Backup/Rollback/Validator/History/VersionManifest. A maintenance layer; imported by nobody except integration.
 - **integration**: Hermes adapters (MigrationTools/Commands), security (permissions/AgentLock/AgentContext), audit, fallback, schemas.
 - **performance**: PerformanceManager + MetricsEngine/LatencyTracker/Profiler/ResourceMonitor/CacheManager/ContextOptimizer/integration wrappers. Measurement only; zero business logic.
