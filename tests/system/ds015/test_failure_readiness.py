@@ -101,22 +101,29 @@ class TestFailureReadiness:
         measured = perf.wrap_retrieval(ctx.retrieval,
                                        fingerprint=ctx.store.fingerprint)
         measured.retrieve("udp", project_id=project.id)
+        # ПОВРЕЖДЕНИЕ кэша (подмена записи)
         perf.cache.clear()
         perf.cache.set("retrieval:p1::udp:", "CORRUPTED")
+        # инвалидация/перестройка: данные из SSOT (Repository+Index)
         again = measured.retrieve("udp", project_id=project.id)
         assert again != "CORRUPTED"
         assert len(again.items) >= 1
+        # Knowledge не повреждён
         assert ctx.repos.knowledge.count(project.id) == 20
 
     def test_scenario_d_unexpected_shutdown(self, tmp_path: Path) -> None:
         """Process killed -> restart: нет частичных записей, нет потери."""
         subprocess.run([sys.executable, "-c", _KILL_SCRIPT, str(tmp_path)],
                        cwd=str(_REPO_ROOT), check=False)
+        # RESTART: повторная инициализация
         ctx = create_ds015_context(tmp_path)
         project = next(p for p in ctx.project.list() if p.name == "KillMe")
+        # нет частичных записей: ровно 10
         assert ctx.repos.knowledge.count(project.id) == 10
+        # нет .tmp-артефактов
         leftovers = list((tmp_path / "projects").rglob("*.tmp*"))
         assert leftovers == [], f"leftover tmp files: {leftovers}"
+        # нет потери памяти: индекс строится (auto_index) -> retrieval
         ctx.index.build(project.id)
         result = ctx.retrieval.retrieve("KF5fact", project_id=project.id)
         assert any("KF5fact" in str(i.entity.title) for i in result.items)
