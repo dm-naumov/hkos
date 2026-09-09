@@ -57,7 +57,7 @@ class SnapshotDiff:
     def _section_index(
         snapshot: SnapshotDocument,
     ) -> dict[str, dict[str, str]]:
-        """Индекс (id -> title) по сравниваемым секциям."""
+        """Индекс (id -> {title, section, body}) по сравниваемым секциям."""
         index: dict[str, dict[str, str]] = {}
         sections = snapshot.sections
         for name in _COMPARED_SECTIONS:
@@ -72,6 +72,7 @@ class SnapshotDiff:
                     index[entity_id] = {
                         "title": str(entry.get("title", "")),
                         "section": name,
+                        "body": str(entry.get("body", entry.get("content", ""))),
                     }
         return index
 
