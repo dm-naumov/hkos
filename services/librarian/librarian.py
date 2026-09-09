@@ -79,8 +79,6 @@ class Librarian:
         self._knowledge: KnowledgeRepository = repositories.knowledge
         self._logger = logger
 
-    # --- Внутренние операции ---
-
     def _load(self, project_id: str, knowledge_id: str) -> Knowledge:
         """Загрузить Knowledge или поднять KnowledgeNotFoundError."""
         try:
@@ -96,36 +94,16 @@ class Librarian:
 
     def _transition(self, knowledge: Knowledge, target: str) -> Knowledge:
         """Проверить и применить переход статуса (KnowledgeStatus)."""
-        knowledge.status = KnowledgeStatus.transition(
-            knowledge.status, target
-        )
+        knowledge.status = KnowledgeStatus.transition(knowledge.status, target)
         return knowledge
 
     def _log(self, message: str) -> None:
         """Системный журнал."""
         self._logger.info(message)
 
-    # --- Публичный API ---
-
-    def validate_relations(
-        self,
-        project_id: str,
-        source_id: str,
-        relations: list[KnowledgeRelation],
-    ) -> tuple[list[KnowledgeRelation], list[str]]:
-        """Проверить входящие рёбра Knowledge (DS-017 §4.2.1).
-
-        Возвращает (валидные рёбра, причины отклонения). Исключений не
-        поднимает: используется write-path'ом (строгий отказ через вызов)
-        и MCP-слоем (превращение причин в warnings ответа).
-
-        Правила (детерминированные):
-        - эффективный проект цели = target_project_id or project_id;
-        - явный target_project_id: проект должен существовать;
-        - цель должна существовать в целевом проекте (knowledge → decisions
-          → artifacts → campaigns);
-        - self-loop (target == source в том же проекте) отклоняется.
-        """
+    def validate_relations(self, project_id: str, source_id: str,
+                           relations: list[KnowledgeRelation]) -> tuple[list[KnowledgeRelation], list[str]]:
+        """Проверить входящие рёбра Knowledge (DS-017 §4.2.1)."""
         if not relations:
             return [], []
         valid: list[KnowledgeRelation] = []
@@ -142,45 +120,28 @@ class Librarian:
             valid.append(relation)
         return valid, warnings
 
-    def _relation_issue(
-        self,
-        project_id: str,
-        source_id: str,
-        relation: KnowledgeRelation,
-    ) -> str | None:
+    def _relation_issue(self, project_id: str, source_id: str,
+                        relation: KnowledgeRelation) -> str | None:
         """Причина отклонения ребра; None — ребро валидно."""
         target_project = relation.target_project_id or project_id
         if relation.target_project_id:
             try:
                 self._repositories.projects.load(relation.target_project_id)
             except RepositoryNotFoundError:
-                return (
-                    f"relation target {relation.target_id}: target project "
-                    f"not found: {relation.target_project_id}"
-                )
-        if (
-            relation.target_id == source_id
-            and target_project == project_id
-        ):
-            return (
-                f"relation target {relation.target_id}: self-loop is not "
-                f"allowed (knowledge cannot reference itself)"
-            )
+                return (f"relation target {relation.target_id}: target project "
+                        f"not found: {relation.target_project_id}")
+        if relation.target_id == source_id and target_project == project_id:
+            return (f"relation target {relation.target_id}: self-loop is not "
+                    f"allowed (knowledge cannot reference itself)")
         if not self._target_exists(target_project, relation.target_id):
-            return (
-                f"relation target {relation.target_id}: target not found "
-                f"in project {target_project}"
-            )
+            return (f"relation target {relation.target_id}: target not found "
+                    f"in project {target_project}")
         return None
 
     def _target_exists(self, project_id: str, entity_id: str) -> bool:
         """Существует ли сущность-цель среди допустимых типов."""
-        for repo in (
-            self._repositories.knowledge,
-            self._repositories.decisions,
-            self._repositories.artifacts,
-            self._repositories.campaigns,
-        ):
+        for repo in (self._repositories.knowledge, self._repositories.decisions,
+                     self._repositories.artifacts, self._repositories.campaigns):
             try:
                 repo.load(project_id, entity_id)
                 return True
@@ -188,67 +149,32 @@ class Librarian:
                 continue
         return False
 
-    def _validate_incoming_relations(
-        self, project_id: str, knowledge: Knowledge
-    ) -> None:
-        """Строгая проверка relations перед persist (write-path целостность).
-
-        Невалидные рёбра не персистятся молча: register/update поднимают
-        LibrarianError со списком причин (DS-017 §4.2.1). Мягкий путь с
-        warnings предоставляет validate_relations для MCP/API-слоя.
-        """
+    def _validate_incoming_relations(self, project_id: str, knowledge: Knowledge) -> None:
+        """Строгая проверка relations перед persist (write-path целостность)."""
         if not knowledge.relations:
             return
-        valid, issues = self.validate_relations(
-            project_id, knowledge.id, knowledge.relations
-        )
+        valid, issues = self.validate_relations(project_id, knowledge.id, knowledge.relations)
         if issues:
             raise LibrarianError("Invalid relations: " + "; ".join(issues))
         knowledge.relations = valid
 
     def explain_category(self, knowledge: Knowledge) -> tuple[str, str]:
-        """Категория и id правила — как их определит register (DS-017 §4.3.1).
-
-        Для ещё не сохранённого Knowledge; используется API/MCP для
-        прозрачности: при переопределении предложенной агентом категории
-        возвращается причина (rule id), а не молчаливая подмена.
-
-        Returns:
-            (категория из VALID_CATEGORIES, стабильный id правила).
-        """
+        """Категория и id правила — как их определит register (DS-017 §4.3.1)."""
         return KnowledgeClassifier.classify_with_rule(knowledge)
 
-    def register(
-        self,
-        project_id: str,
-        knowledge: Knowledge,
-        category: str | None = None,
-    ) -> Knowledge:
-        """Зарегистрировать новое Knowledge.
-
-        Классификация категории (если не задана), статус NEW,
-        confidence рассчитывается, история: Created.
-
-        Raises:
-            LibrarianError: Если knowledge.id уже занят.
-
-        """
+    def register(self, project_id: str, knowledge: Knowledge,
+                 category: str | None = None) -> Knowledge:
+        """Зарегистрировать новое Knowledge."""
         if knowledge.id and self._knowledge.exists(project_id, knowledge.id):
-            raise LibrarianError(
-                f"Knowledge already exists: {knowledge.id}"
-            )
+            raise LibrarianError(f"Knowledge already exists: {knowledge.id}")
         knowledge.id = knowledge.id or str(uuid.uuid4())
         knowledge.project = project_id
         if category:
             knowledge.category = category
         else:
-            knowledge.category, _ = KnowledgeClassifier.classify_with_rule(
-                knowledge
-            )
+            knowledge.category, _ = KnowledgeClassifier.classify_with_rule(knowledge)
         if not KnowledgeClassifier.is_valid(knowledge.category):
-            raise LibrarianError(
-                f"Invalid category: {knowledge.category!r}"
-            )
+            raise LibrarianError(f"Invalid category: {knowledge.category!r}")
         knowledge.status = KNOWLEDGE_STATUS_NEW
         knowledge.confidence = ConfidenceEngine.calculate(knowledge)
         KnowledgeHistory.append(knowledge, EVENT_CREATED)
@@ -257,21 +183,8 @@ class Librarian:
         self._log(f"KnowledgeRegistered: {knowledge.id} ({knowledge.category})")
         return saved
 
-    def update(
-        self,
-        project_id: str,
-        knowledge: Knowledge,
-    ) -> Knowledge:
-        """Обновить Knowledge.
-
-        Неизменяемые поля сохраняются: id, created_at, category (после
-        канонизации), parent_ids, canonical_id, history. Confidence
-        пересчитывается автоматически.
-
-        Raises:
-            KnowledgeNotFoundError: Если знание отсутствует.
-
-        """
+    def update(self, project_id: str, knowledge: Knowledge) -> Knowledge:
+        """Обновить Knowledge."""
         if not knowledge.id:
             raise KnowledgeNotFoundError("update requires knowledge with id")
         existing = self._load(project_id, knowledge.id)
@@ -297,17 +210,9 @@ class Librarian:
         return saved
 
     def verify(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Верифицировать Knowledge отдельным действием (NEW -> VERIFIED).
-
-        Повторная верификация VERIFIED или CANONICAL идемпотентна. Другие
-        исходные статусы не обходят state machine и завершаются
-        KnowledgeStatusError.
-        """
+        """Верифицировать Knowledge отдельным действием (NEW -> VERIFIED)."""
         knowledge = self._load(project_id, knowledge_id)
-        if (
-            KnowledgeStatus.is_verified(knowledge)
-            or KnowledgeStatus.is_canonical(knowledge)
-        ):
+        if KnowledgeStatus.is_verified(knowledge) or KnowledgeStatus.is_canonical(knowledge):
             return knowledge
         self._transition(knowledge, KNOWLEDGE_STATUS_VERIFIED)
         KnowledgeHistory.append(knowledge, EVENT_VERIFIED)
@@ -316,12 +221,7 @@ class Librarian:
         return saved
 
     def canonicalize(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Канонизировать отдельно верифицированное Knowledge.
-
-        Разрешённый переход: VERIFIED -> CANONICAL. Вызов для NEW не
-        выполняет скрытую верификацию и завершается KnowledgeStatusError.
-        Повторная канонизация CANONICAL идемпотентна.
-        """
+        """Канонизировать отдельно верифицированное Knowledge."""
         knowledge = self._load(project_id, knowledge_id)
         if KnowledgeStatus.is_canonical(knowledge):
             return knowledge
@@ -331,26 +231,11 @@ class Librarian:
         self._log(f"KnowledgeCanonicalized: {knowledge_id}")
         return saved
 
-    def merge(
-        self,
-        project_id: str,
-        first_id: str,
-        second_id: str,
-        reason: str = "",
-    ) -> Knowledge:
-        """Объединить два Knowledge в новое Canonical Knowledge.
-
-        Исходные A и B не изменяются (immutability, IP-006 §6).
-        Создаётся C (новый UUID, CANONICAL, parent_ids=[A, B]).
-
-        Raises:
-            KnowledgeNotFoundError: Если источник отсутствует.
-
-        """
+    def merge(self, project_id: str, first_id: str, second_id: str,
+              reason: str = "") -> Knowledge:
+        """Объединить два Knowledge в новое Canonical Knowledge."""
         if first_id == second_id:
-            raise LibrarianError(
-                "merge requires two distinct Knowledge (self-merge is meaningless)"
-            )
+            raise LibrarianError("merge requires two distinct Knowledge (self-merge is meaningless)")
         a = self._load(project_id, first_id)
         b = self._load(project_id, second_id)
         merged = KnowledgeMerger.merge(a, b, reason=reason)
@@ -361,7 +246,6 @@ class Librarian:
         return saved
 
     def archive(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Архивировать Knowledge (-> ARCHIVED)."""
         knowledge = self._load(project_id, knowledge_id)
         self._transition(knowledge, KNOWLEDGE_STATUS_ARCHIVED)
         KnowledgeHistory.append(knowledge, EVENT_ARCHIVED)
@@ -370,7 +254,6 @@ class Librarian:
         return saved
 
     def restore(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Восстановить Knowledge (ARCHIVED -> VERIFIED)."""
         knowledge = self._load(project_id, knowledge_id)
         self._transition(knowledge, KNOWLEDGE_STATUS_VERIFIED)
         KnowledgeHistory.append(knowledge, EVENT_RESTORED)
@@ -379,7 +262,6 @@ class Librarian:
         return saved
 
     def reject(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Отклонить Knowledge (NEW/CONFLICT -> REJECTED)."""
         knowledge = self._load(project_id, knowledge_id)
         self._transition(knowledge, KNOWLEDGE_STATUS_REJECTED)
         KnowledgeHistory.append(knowledge, EVENT_REJECTED)
@@ -387,65 +269,42 @@ class Librarian:
         self._log(f"KnowledgeRejected: {knowledge_id}")
         return saved
 
-    def detect_conflicts(
-        self,
-        project_id: str,
-        knowledge_id: str,
-    ) -> list[Knowledge]:
-        """Обнаружить конфликты Knowledge с остальными знаниями проекта."""
+    def detect_conflicts(self, project_id: str, knowledge_id: str) -> list[Knowledge]:
         knowledge = self._load(project_id, knowledge_id)
-        candidates = self._knowledge.list(project_id)
-        result = ConflictDetector.detect(knowledge, candidates)
+        result = ConflictDetector.detect(knowledge, self._knowledge.list(project_id))
         if result.conflict_exists:
-            if knowledge.status in (
-                KNOWLEDGE_STATUS_NEW,
-                KNOWLEDGE_STATUS_VERIFIED,
-                KNOWLEDGE_STATUS_CANONICAL,
-            ):
+            if knowledge.status in (KNOWLEDGE_STATUS_NEW, KNOWLEDGE_STATUS_VERIFIED,
+                                    KNOWLEDGE_STATUS_CANONICAL):
                 self._transition(knowledge, KNOWLEDGE_STATUS_CONFLICT)
-            KnowledgeHistory.append(
-                knowledge, EVENT_CONFLICT_DETECTED,
-                details="; ".join(k.id for k in result.conflicting),
-            )
+            KnowledgeHistory.append(knowledge, EVENT_CONFLICT_DETECTED,
+                                    details="; ".join(k.id for k in result.conflicting))
             saved = self._save(knowledge)
             self._log(f"KnowledgeConflict: {knowledge_id} (conflict found)")
             return [k for k in result.conflicting if k.id != saved.id]
         self._log(f"KnowledgeConflict: {knowledge_id} (no conflicts)")
         return []
 
-    def recalculate_confidence(
-        self, project_id: str, knowledge_id: str
-    ) -> Knowledge:
-        """Пересчитать confidence из инженерных факторов (никогда вручную)."""
+    def recalculate_confidence(self, project_id: str, knowledge_id: str) -> Knowledge:
         knowledge = self._load(project_id, knowledge_id)
         new_confidence = ConfidenceEngine.calculate(knowledge)
         if new_confidence != knowledge.confidence:
             knowledge.confidence = new_confidence
-            KnowledgeHistory.append(
-                knowledge, EVENT_CONFIDENCE_CHANGED,
-                details=f"confidence={new_confidence}",
-            )
+            KnowledgeHistory.append(knowledge, EVENT_CONFIDENCE_CHANGED,
+                                    details=f"confidence={new_confidence}")
             saved = self._save(knowledge)
             self._log(f"ConfidenceChanged: {knowledge_id} -> {new_confidence}")
             return saved
         return knowledge
 
-    def history(
-        self, project_id: str, knowledge_id: str
-    ) -> list[KnowledgeHistoryEntry]:
-        """История Knowledge (только чтение, append-only)."""
+    def history(self, project_id: str, knowledge_id: str) -> list[KnowledgeHistoryEntry]:
         knowledge = self._load(project_id, knowledge_id)
         return KnowledgeHistory.entries(knowledge)
 
     def validate(self, project_id: str, knowledge_id: str) -> ValidationResult:
-        """Проверить Knowledge (структура/статус/категория)."""
         errors: list[str] = []
         warnings: list[str] = []
         if not self._knowledge.exists(project_id, knowledge_id):
-            return ValidationResult(
-                valid=False,
-                errors=[f"Knowledge not found: {knowledge_id}"],
-            )
+            return ValidationResult(valid=False, errors=[f"Knowledge not found: {knowledge_id}"])
         try:
             knowledge = self._load(project_id, knowledge_id)
         except KnowledgeNotFoundError as e:
