@@ -6,7 +6,6 @@ ordinary retrieval observes the production CANONICAL-only boundary.
 """
 
 from collections.abc import Generator
-from typing import Any
 
 import pytest
 from pytest import MonkeyPatch
