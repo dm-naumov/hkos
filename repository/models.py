@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Final, Mapping
 
 from hkos.repository.knowledge_relations import (
     KnowledgeRelation,
@@ -39,12 +41,18 @@ __all__ = [
     "KnowledgeRelation",
     "RelationType",
     "KNOWLEDGE_STATUS_NEW",
+    "KNOWLEDGE_STATUS_VERIFIED",
+    "KNOWLEDGE_STATUS_CANONICAL",
+    "KNOWLEDGE_STATUS_SUPERSEDED",
+    "KNOWLEDGE_STATUS_CONFLICT",
+    "KNOWLEDGE_STATUS_REJECTED",
+    "KNOWLEDGE_STATUS_ARCHIVED",
+    "VALID_KNOWLEDGE_STATUSES",
+    "LEGACY_KNOWLEDGE_STATUS_MAP",
+    "normalize_knowledge_status",
     "KNOWLEDGE_STATUS_CANDIDATE",
     "KNOWLEDGE_STATUS_UNDER_REVIEW",
     "KNOWLEDGE_STATUS_VALIDATED",
-    "KNOWLEDGE_STATUS_CANONICAL",
-    "KNOWLEDGE_STATUS_SUPERSEDED",
-    "KNOWLEDGE_STATUS_ARCHIVED",
     "ARTIFACT_STATUS_ACTIVE",
     "ARTIFACT_STATUS_ARCHIVED",
     "DECISION_ACCEPT",
@@ -61,14 +69,55 @@ CAMPAIGN_STATUS_COMPLETED: str = "completed"
 CAMPAIGN_STATUS_CLOSED: str = "closed"
 CAMPAIGN_STATUS_ARCHIVED: str = "archived"
 
-# --- Knowledge lifecycle (HKOS-03 §16) ---
-KNOWLEDGE_STATUS_NEW: str = "new"
-KNOWLEDGE_STATUS_CANDIDATE: str = "candidate"
-KNOWLEDGE_STATUS_UNDER_REVIEW: str = "under_review"
-KNOWLEDGE_STATUS_VALIDATED: str = "validated"
-KNOWLEDGE_STATUS_CANONICAL: str = "canonical"
-KNOWLEDGE_STATUS_SUPERSEDED: str = "superseded"
-KNOWLEDGE_STATUS_ARCHIVED: str = "archived"
+# --- Knowledge lifecycle (ADR-001; authoritative vocabulary) ---
+KNOWLEDGE_STATUS_NEW: Final[str] = "NEW"
+KNOWLEDGE_STATUS_VERIFIED: Final[str] = "VERIFIED"
+KNOWLEDGE_STATUS_CANONICAL: Final[str] = "CANONICAL"
+KNOWLEDGE_STATUS_SUPERSEDED: Final[str] = "SUPERSEDED"
+KNOWLEDGE_STATUS_CONFLICT: Final[str] = "CONFLICT"
+KNOWLEDGE_STATUS_REJECTED: Final[str] = "REJECTED"
+KNOWLEDGE_STATUS_ARCHIVED: Final[str] = "ARCHIVED"
+
+VALID_KNOWLEDGE_STATUSES: Final[frozenset[str]] = frozenset({
+    KNOWLEDGE_STATUS_NEW,
+    KNOWLEDGE_STATUS_VERIFIED,
+    KNOWLEDGE_STATUS_CANONICAL,
+    KNOWLEDGE_STATUS_SUPERSEDED,
+    KNOWLEDGE_STATUS_CONFLICT,
+    KNOWLEDGE_STATUS_REJECTED,
+    KNOWLEDGE_STATUS_ARCHIVED,
+})
+
+# Compatibility names retained for 1.x imports. They are aliases to canonical
+# states, not additional lifecycle values.
+KNOWLEDGE_STATUS_CANDIDATE: Final[str] = KNOWLEDGE_STATUS_NEW
+KNOWLEDGE_STATUS_UNDER_REVIEW: Final[str] = KNOWLEDGE_STATUS_NEW
+KNOWLEDGE_STATUS_VALIDATED: Final[str] = KNOWLEDGE_STATUS_VERIFIED
+
+# Legacy values are accepted only while decoding persisted v1.x documents.
+LEGACY_KNOWLEDGE_STATUS_MAP: Final[Mapping[str, str]] = MappingProxyType({
+    "new": KNOWLEDGE_STATUS_NEW,
+    "candidate": KNOWLEDGE_STATUS_NEW,
+    # Pre-validation legacy states stay untrusted; normalization must not
+    # manufacture verification.
+    "under_review": KNOWLEDGE_STATUS_NEW,
+    "validated": KNOWLEDGE_STATUS_VERIFIED,
+    "verified": KNOWLEDGE_STATUS_VERIFIED,
+    "canonical": KNOWLEDGE_STATUS_CANONICAL,
+    "superseded": KNOWLEDGE_STATUS_SUPERSEDED,
+    "conflict": KNOWLEDGE_STATUS_CONFLICT,
+    "rejected": KNOWLEDGE_STATUS_REJECTED,
+    "archived": KNOWLEDGE_STATUS_ARCHIVED,
+})
+
+
+def normalize_knowledge_status(status: str) -> str:
+    """Normalize a known legacy persisted status to the canonical vocabulary.
+
+    Unknown values are preserved so existing validation can report them as
+    invalid instead of silently inventing a lifecycle transition.
+    """
+    return LEGACY_KNOWLEDGE_STATUS_MAP.get(status, status)
 
 # --- Artifact status ---
 ARTIFACT_STATUS_ACTIVE: str = "active"
