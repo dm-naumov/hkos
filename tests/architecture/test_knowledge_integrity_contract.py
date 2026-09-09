@@ -239,13 +239,6 @@ class TestStatusVocabulary:
 class TestRepositoryBoundary:
     """Target: repository exposes no lifecycle mutations."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "KNOWN-DEVIATION KI-006: KnowledgeRepository.archive() mutates "
-            "lifecycle status directly, bypassing Librarian policy"
-        ),
-    )
     def test_repository_has_no_lifecycle_mutation(self, tmp_path: Path) -> None:
         """KI-006: the repository API exposes no archive() mutation.
 
