@@ -36,6 +36,7 @@ from hkos.services.librarian.knowledge_history import (
     EVENT_REJECTED,
     EVENT_RESTORED,
     EVENT_UPDATED,
+    EVENT_VERIFIED,
     KnowledgeHistory,
 )
 from hkos.services.librarian.knowledge_merger import KnowledgeMerger
@@ -57,7 +58,7 @@ class Librarian:
     """Оркестратор жизненного цикла Knowledge (единственная точка изменений).
 
     Публичный API (ровно эти методы):
-        register, update, canonicalize, merge, archive, restore, reject,
+        register, update, verify, canonicalize, merge, archive, restore, reject,
         detect_conflicts, recalculate_confidence, history, validate,
         validate_relations, explain_category
     """
@@ -134,10 +135,6 @@ class Librarian:
             if reason is not None:
                 warnings.append(reason)
                 continue
-            # Нормализация владельца: ребро авторинга без source исходит из
-            # владельца (иначе рёбра «мертвы» для обхода — out[""]);
-            # relation_id генерируется при отсутствии (дедуп по пустому id
-            # терял бы рёбра — правило MCP-слоя, DS-017 §4.2).
             if not relation.source_id:
                 relation.source_id = source_id
             if not relation.relation_id:
@@ -245,9 +242,6 @@ class Librarian:
         if category:
             knowledge.category = category
         else:
-            # Детерминированная классификация с id правила (DS-017 §4.3.1):
-            # register игнорирует предзаполненный knowledge.category — финальная
-            # категория всегда от классификатора, если явный category не задан.
             knowledge.category, _ = KnowledgeClassifier.classify_with_rule(
                 knowledge
             )
@@ -281,14 +275,13 @@ class Librarian:
         if not knowledge.id:
             raise KnowledgeNotFoundError("update requires knowledge with id")
         existing = self._load(project_id, knowledge.id)
-        # Валидация замкнутого словаря категорий (Post-Audit Refinement).
         if not KnowledgeClassifier.is_valid(knowledge.category):
             raise LibrarianError(
                 f"Invalid category: {knowledge.category!r} "
                 f"(closed vocabulary, Post-Audit Refinement)"
             )
         if KnowledgeStatus.is_canonical(existing):
-            knowledge.category = existing.category  # категория неизменяема
+            knowledge.category = existing.category
         knowledge.id = existing.id
         knowledge.project = existing.project
         knowledge.created_at = existing.created_at
@@ -297,29 +290,41 @@ class Librarian:
         knowledge.history = existing.history
         knowledge.confidence = ConfidenceEngine.calculate(knowledge)
         KnowledgeHistory.append(knowledge, EVENT_UPDATED)
-        # Валидируются только ИЗМЕНЁННЫЕ relations: неизменный набор (в т.ч.
-        # устаревший, с висячей целью) не блокирует правку других полей —
-        # висячие ссылки выявляет doctor (DS-017 §4.2.1, ЭТАП 3).
         if knowledge.relations != existing.relations:
             self._validate_incoming_relations(project_id, knowledge)
         saved = self._knowledge.update(knowledge)
         self._log(f"KnowledgeUpdated: {knowledge.id}")
         return saved
 
-    def canonicalize(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Канонизировать Knowledge.
+    def verify(self, project_id: str, knowledge_id: str) -> Knowledge:
+        """Верифицировать Knowledge отдельным действием (NEW -> VERIFIED).
 
-        Канонизация включает верификацию: NEW -> VERIFIED -> CANONICAL
-        (отдельного публичного метода verify() в API DS-006 нет).
-        Из VERIFIED -> CANONICAL напрямую.
+        Повторная верификация VERIFIED или CANONICAL идемпотентна. Другие
+        исходные статусы не обходят state machine и завершаются
+        KnowledgeStatusError.
         """
         knowledge = self._load(project_id, knowledge_id)
-        # Идемпотентность (Post-Audit Refinement): повторная канонизация
-        # уже канонического знания — no-op, без исключения.
+        if (
+            KnowledgeStatus.is_verified(knowledge)
+            or KnowledgeStatus.is_canonical(knowledge)
+        ):
+            return knowledge
+        self._transition(knowledge, KNOWLEDGE_STATUS_VERIFIED)
+        KnowledgeHistory.append(knowledge, EVENT_VERIFIED)
+        saved = self._save(knowledge)
+        self._log(f"KnowledgeVerified: {knowledge_id}")
+        return saved
+
+    def canonicalize(self, project_id: str, knowledge_id: str) -> Knowledge:
+        """Канонизировать отдельно верифицированное Knowledge.
+
+        Разрешённый переход: VERIFIED -> CANONICAL. Вызов для NEW не
+        выполняет скрытую верификацию и завершается KnowledgeStatusError.
+        Повторная канонизация CANONICAL идемпотентна.
+        """
+        knowledge = self._load(project_id, knowledge_id)
         if KnowledgeStatus.is_canonical(knowledge):
             return knowledge
-        if KnowledgeStatus.is_new(knowledge):
-            self._transition(knowledge, KNOWLEDGE_STATUS_VERIFIED)
         self._transition(knowledge, KNOWLEDGE_STATUS_CANONICAL)
         KnowledgeHistory.append(knowledge, EVENT_CANONICALIZED)
         saved = self._save(knowledge)
@@ -387,15 +392,7 @@ class Librarian:
         project_id: str,
         knowledge_id: str,
     ) -> list[Knowledge]:
-        """Обнаружить конфликты Knowledge с остальными знаниями проекта.
-
-        Если конфликт найден — статус Knowledge переводится в CONFLICT
-        (DS-006 §11). Никакое знание не удаляется (IP-006 §14).
-
-        Returns:
-            Список конфликтующих Knowledge.
-
-        """
+        """Обнаружить конфликты Knowledge с остальными знаниями проекта."""
         knowledge = self._load(project_id, knowledge_id)
         candidates = self._knowledge.list(project_id)
         result = ConflictDetector.detect(knowledge, candidates)
