@@ -52,6 +52,7 @@ class SqliteContext:
             self.repos, self.json_store, HKOSLogger(), cache=cache)
 
     def build_corpus(self) -> str:
+        """Корпус с тегами/negative/merge-relations; JSON-индексы построены."""
         project = self.projects.create(name="P1", tags=["demo"])
         pid = project.id
         a = self.librarian.register(
@@ -72,12 +73,15 @@ class SqliteContext:
         return pid
 
     def json_data(self, pid: str, name: str) -> dict[str, object] | None:
+        """data индекс-дока из JSON-бэкенда."""
         return self.json_store.read(pid, name)
 
     def sqlite_data(self, pid: str, name: str) -> dict[str, object] | None:
+        """data индекс-дока из sqlite-бэкенда (mirror записан ранее)."""
         return self.sqlite_store.read(pid, name)
 
     def mirror(self, pid: str, name: str, data: dict[str, object]) -> None:
+        """Записать data в sqlite-бэкенд (конверт как _index_doc)."""
         self.sqlite_store.write(pid, name, {
             "schema": "HKOS-1.0", "type": "index", "version": 1,
             "data": data,
@@ -85,10 +89,13 @@ class SqliteContext:
 
 
 class TestSqliteIndexStore:
+    """Контракт IndexStore поверх SQLite + parity с JSON."""
+
     def _ctx(self, tmp_path: Path) -> SqliteContext:
         return SqliteContext(tmp_path)
 
     def test_parity_all_five_index_docs(self, tmp_path: Path) -> None:
+        """Каждый из 5 доков: sqlite.read == json.read (значение)."""
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
@@ -185,6 +192,7 @@ class TestSqliteIndexStore:
         assert missing == ((INDEX_STORE_DB, -1, -1),)
 
     def test_stable_roundtrip(self, tmp_path: Path) -> None:
+        """write→read→write даёт стабильные данные (идемпотентность)."""
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
@@ -198,6 +206,13 @@ class TestSqliteIndexStore:
 
 
 class TestSqliteDeltaUpdate:
+    """IP-017-v1.2 ЭТАП 1b: дельта update_entity/remove_entity.
+
+    Пошаговые операции (добавление/модификация/удаление) выполняются на
+    JSON-пути (IndexEngine.update/remove — эталон) и на sqlite
+    (update_entity/remove_entity); после КАЖДОГО шага все 5 доков равны.
+    """
+
     def test_incremental_ops_match_json(self, tmp_path: Path) -> None:
         ctx = SqliteContext(tmp_path)
         pid = ctx.projects.create(name="Delta", tags=["t"]).id
@@ -252,6 +267,7 @@ class TestSqliteDeltaUpdate:
 
 
 def _assert_all_equal(ctx: SqliteContext, pid: str) -> None:
+    """Все 5 доков sqlite == json (после операции)."""
     for name in _INDEX_NAMES:
         json_data = ctx.json_data(pid, name)
         assert json_data is not None, name
@@ -259,6 +275,12 @@ def _assert_all_equal(ctx: SqliteContext, pid: str) -> None:
 
 
 class TestSqliteQueryLayer:
+    """ЭТАП 2: Q1-Q5 исполняются SQL (снапшот-паритет) + горячий путь.
+
+    SqliteIndexSnapshot повторяет контракт IndexSnapshot; RetrievalEngine
+    через IndexQueryExecutor не знает, какой бэкенд под ним.
+    """
+
     def test_query_snapshot_matches_json(self, tmp_path: Path) -> None:
         ctx = SqliteContext(tmp_path)
         pid = ctx.build_corpus()
@@ -268,6 +290,7 @@ class TestSqliteQueryLayer:
         sqlite_qc = IndexQueryExecutor(ctx.sqlite_store)
         js = json_qc.snapshot(pid)
         ss = sqlite_qc.snapshot(pid)
+
         assert ss.keyword_search("udp") == js.keyword_search("udp")
         assert ss.keyword_search("mtu") == js.keyword_search("mtu")
         assert ss.keyword_search("absent-word") == []
@@ -321,6 +344,7 @@ class TestSqliteQueryLayer:
         ]:
             k = librarian.register(
                 pid, Knowledge(title=title, body=body, tags=tags))
+            librarian.verify(pid, k.id)
             librarian.canonicalize(pid, k.id)
             index.update(pid, k.id, "knowledge")
             titles.append(title)
