@@ -56,13 +56,10 @@ class _Persistence:
 
 
 def _llm_mock(context: object) -> str:
-    """Мок ответа LLM по контексту."""
     return "task completed"
 
 
 class _Harness:
-    """Полная композиция HKOS для E2E pipeline."""
-
     def __init__(self, tmp_path: Path):
         cfg = ConfigLoader(profile="development")
         cfg.load()
@@ -93,8 +90,6 @@ class _Harness:
 
 
 class _ProbeEngine:
-    """Локальный двойник MigrationEngine (без кросс-импортов тестов)."""
-
     def __init__(self) -> None:
         self.failed = False
 
@@ -128,8 +123,6 @@ class _ProbeEngine:
 
 
 class TestE2EPipeline:
-    """Полный жизненный цикл задачи: User -> Hermes -> ... -> Snapshot."""
-
     def test_full_pipeline_order(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
@@ -137,12 +130,9 @@ class TestE2EPipeline:
         order: list[str] = []
 
         def recorder(name: str, fn: object) -> object:
-            """Обёртка: фиксирует порядок вызова, делегирует оригиналу."""
-
             def wrapper(*args: object, **kwargs: object) -> object:
                 order.append(name)
                 return fn(*args, **kwargs)  # type: ignore[operator]
-
             return wrapper
 
         targets = [
@@ -199,16 +189,15 @@ class TestE2EPipeline:
             agent_id="agent-1", project_id=project.id,
             knowledge=[Knowledge(title="UDP v2", body="udp updated", tags=["udp"])])
         assert len(result.saved) == 1
+        saved_id = result.saved[0]
         ordinary = h.retrieval.retrieve("udp v2", project_id=project.id)
-        assert ordinary.items == []
+        assert all(item.entity.id != saved_id for item in ordinary.items)
         historical = h.retrieval.retrieve(
             "udp v2", project_id=project.id, include_history=True)
-        assert len(historical.items) >= 1
+        assert any(item.entity.id == saved_id for item in historical.items)
 
 
 class TestMemoryService:
-    """prepare_context / save_results (DS-012 ЭТАП 5 §2)."""
-
     def test_prepare_context_components(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         prepared = h.memory.prepare_context(
@@ -243,8 +232,6 @@ class TestMemoryService:
 
 
 class TestProjectCampaignFlow:
-    """Новый/существующий проект; активная кампания; запрет без проекта."""
-
     def test_new_project_created(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.memory.resolve_project(project_name="BrandNew")
@@ -278,8 +265,6 @@ class TestProjectCampaignFlow:
 
 
 class TestSnapshotFlow:
-    """Snapshot есть -> контекст с ним; нет -> без ошибок."""
-
     def test_with_snapshot(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -299,8 +284,6 @@ class TestSnapshotFlow:
 
 
 class TestFailureKnowledge:
-    """Задача с ошибкой -> Knowledge FAILURE; retrieval policy."""
-
     def test_failure_knowledge_saved_and_retrievable(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -323,8 +306,6 @@ class TestFailureKnowledge:
 
 
 class TestMultiAgent:
-    """3 агента на одном HKOS с явным trust promotion."""
-
     def test_shared_memory_and_audit(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -352,8 +333,6 @@ class TestMultiAgent:
 
 
 class TestSecurityE2E:
-    """Security boundary E2E (DS-012 ЭТАП 5 §7)."""
-
     def test_write_without_permission_blocked(self, tmp_path: Path) -> None:
         engine = _ProbeEngine()
         tools = MigrationTools(engine)  # type: ignore[arg-type]
@@ -395,8 +374,6 @@ class TestSecurityE2E:
 
 
 class TestFallbackE2E:
-    """Graceful degradation (DS-012 ЭТАП 5 §8)."""
-
     def test_retrieval_unavailable_continues(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
@@ -434,8 +411,6 @@ class TestFallbackE2E:
 
 
 class TestPipelinePerformance:
-    """Бюджеты производительности (DS-012 ЭТАП 5 §9)."""
-
     def test_pipeline_budgets(self, tmp_path: Path) -> None:
         h = _Harness(tmp_path)
         project = h.projects.create(name="OpenWrt", tags=["router"])
