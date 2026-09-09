@@ -219,8 +219,9 @@ A future semantic backend:
 - is never required for the deterministic core to function.
 
 The frozen Query Contract Q1–Q5 is not extended (no Q6) for semantic
-retrieval; semantic signals arrive through the existing candidate
-interface only.
+retrieval. Semantic candidates will enter retrieval through a dedicated
+future candidate-provider extension point built around CandidateSet; the
+Query Contract Q1–Q5 remains unchanged.
 
 ## Compatibility and migration policy
 

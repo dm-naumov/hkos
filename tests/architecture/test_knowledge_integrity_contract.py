@@ -127,7 +127,7 @@ class TestDefaultEligibility:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="KNOWN-DEVIATION KI-001: NEW passes the default filter",
+        reason="KNOWN-DEVIATION KI-001: VERIFIED passes the default filter",
     )
     def test_verified_not_admitted(self, tmp_path: Path) -> None:
         """KI-001: VERIFIED is not admitted by default eligibility."""
