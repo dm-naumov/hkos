@@ -42,7 +42,6 @@ from hkos.services.librarian.knowledge_history import (
 )
 from hkos.services.librarian.knowledge_status import (
     KNOWLEDGE_STATUS_ARCHIVED,
-    KNOWLEDGE_STATUS_CANONICAL,
     KNOWLEDGE_STATUS_NEW,
 )
 from hkos.services.project_manager import ProjectManager
