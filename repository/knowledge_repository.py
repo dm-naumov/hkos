@@ -1,7 +1,10 @@
 """HKOS Knowledge Repository (DS-003 §9)
 =====================================
-Работа с объектами Knowledge: create/load/update/archive/list,
+操作с объектами Knowledge: create/load/update/list,
 линейный поиск по тегу и типу (без индексации).
+
+Архивирование Knowledge — исключительная ответственность Librarian
+(Librarian.archive). Репозиторий не содержит lifecycle-мутаций.
 """
 
 from typing import Any
@@ -9,7 +12,6 @@ from typing import Any
 from hkos.repository.base_repository import BaseRepository
 from hkos.repository.exceptions import RepositoryError, RepositoryParseError
 from hkos.repository.models import (
-    KNOWLEDGE_STATUS_ARCHIVED,
     KNOWLEDGE_STATUS_NEW,
     VALID_KNOWLEDGE_STATUSES,
     Knowledge,
@@ -27,6 +29,9 @@ class KnowledgeRepository(BaseRepository[Knowledge]):
 
     Документ — projects/<p>/knowledge/<id>.json (HKOS-08 §5).
     Никакой индексации: только линейный поиск по полям.
+
+    Lifecycle-операции (verify, canonicalize, archive, restore, reject)
+    делегированы Librarian — единственному оркестратору жизненного цикла.
     """
 
     _type_name: str = "knowledge"
@@ -130,13 +135,6 @@ class KnowledgeRepository(BaseRepository[Knowledge]):
     def create(self, knowledge: Knowledge) -> Knowledge:
         """Создать знание."""
         return self.save(knowledge)
-
-    def archive(self, project: str, object_id: str) -> Knowledge:
-        """Архивировать знание (статус ARCHIVED; legacy API)."""
-        knowledge = self.load(project, object_id)
-        knowledge.status = KNOWLEDGE_STATUS_ARCHIVED
-        self.update(knowledge)
-        return knowledge
 
     def search_by_tag(self, project: str, tag: str) -> list[Knowledge]:
         """Линейный поиск знаний по тегу."""

@@ -10,7 +10,6 @@ from hkos.core.version import VersionManager
 from hkos.repository.exceptions import RepositoryNotFoundError
 from hkos.repository.knowledge_repository import KnowledgeRepository
 from hkos.repository.models import (
-    KNOWLEDGE_STATUS_ARCHIVED,
     KNOWLEDGE_STATUS_NEW,
     Knowledge,
 )
@@ -48,12 +47,6 @@ class TestKnowledgeRepository:
         loaded = repo.load(project, original_id)
         assert loaded.id == original_id
         assert loaded.confidence == 95
-
-    def test_archive_sets_status(self, tmp_path: Path) -> None:
-        repo, project = self._repo(tmp_path)
-        k = repo.create(Knowledge(project=project, title="A"))
-        repo.archive(project, k.id)
-        assert repo.load(project, k.id).status == KNOWLEDGE_STATUS_ARCHIVED
 
     def test_search_by_tag(self, tmp_path: Path) -> None:
         repo, project = self._repo(tmp_path)
