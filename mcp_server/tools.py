@@ -155,7 +155,6 @@ def tool_save(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
         relations, parse_warnings = _parse_relations(raw_relations)
         warnings.extend(parse_warnings)
         if relations:
-            # source id известен до register — self-loop проверяется
             knowledge.id = knowledge.id or str(uuid.uuid4())
             valid, relation_warnings = ctx.librarian.validate_relations(
                 project.id, knowledge.id, relations
@@ -164,6 +163,7 @@ def tool_save(ctx: McpContext, args: dict[str, Any]) -> dict[str, Any]:
             knowledge.relations = valid
     registered = ctx.librarian.register(project.id, knowledge)
     if args.get("canonicalize", False):
+        ctx.librarian.verify(project.id, registered.id)
         ctx.librarian.canonicalize(project.id, registered.id)
     # Index every observation. Ordinary retrieval still admits only CANONICAL;
     # explicit include_history can inspect NEW observations.
