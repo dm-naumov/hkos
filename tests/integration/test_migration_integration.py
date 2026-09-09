@@ -105,6 +105,7 @@ class _Harness:
         assert p is not None
         k = self.lib.register(p.id, Knowledge(
             title="UDP fix", body="udp", tags=["udp"], confirmations=8))
+        self.lib.verify(p.id, k.id)
         self.lib.canonicalize(p.id, k.id)
         self.index.build(p.id)
         return p.id
@@ -122,19 +123,16 @@ class TestMigrationIntegration:
     """Полные сценарии DS-011 §19 / IP-011 ЭТАП 7."""
 
     def test_scenario_1_full_pipeline(self, tmp_path: Path) -> None:
-        """v1 -> Migrate -> v2 -> rebuild -> regenerate -> validate -> COMPLETED."""
         h = _Harness(tmp_path)
         project = h.corpus()
         h.api.migrate()
         assert h.api.status().startswith("COMPLETED")
         assert h.applied == ["001_mig"]
         assert h.api.history()[-1].status == "completed"
-        # производные существуют
         assert h.index.validate(project).valid is True
         assert h.snap.load(project) is not None
 
     def test_scenario_2_error_rollback_restore(self, tmp_path: Path) -> None:
-        """Ошибка apply -> Rollback -> Repository восстановлен."""
         def boom(step: object) -> None:
             raise RuntimeError("apply boom")
 
@@ -146,43 +144,36 @@ class TestMigrationIntegration:
             h.api.migrate()
         assert h.api.status().startswith("FAILED")
         after = sorted(p.name for p in knowledge_dir.iterdir())
-        assert before == after  # Repository полностью восстановлен
-        # rollback события в журнале
+        assert before == after
         statuses = [r.status for r in h.api.history()]
         assert "rollback" in statuses
         assert "failed" in statuses
 
     def test_scenario_3_repeat_up_to_date(self, tmp_path: Path) -> None:
-        """Повторный запуск: up-to-date, ноль изменений, ноль новых backup."""
         h = _Harness(tmp_path)
         h.corpus()
         h.api.migrate()
         backups = len(list((tmp_path / "backup").iterdir()))
         entries_before = len(h.api.history())
-        h.versions[0] = 2  # после миграции версия 2
+        h.versions[0] = 2
         h.api.migrate()
         assert h.api.status().startswith("COMPLETED")
         assert len(list((tmp_path / "backup").iterdir())) == backups
-        assert len(h.api.history()) > entries_before  # append-only: факт запуска
-        # шаг повторно не применялся
+        assert len(h.api.history()) > entries_before
         assert h.applied == ["001_mig"]
 
     def test_scenario_4_concurrent_lock(self, tmp_path: Path) -> None:
-        """Второй engine при активной миграции -> MigrationLockError."""
         h = _Harness(tmp_path)
         h.corpus()
         h.api.acquire_lock()
-        # второй engine с ТЕМ ЖЕ lock-файлом -> MigrationLockError
         h2 = _Harness(tmp_path / "second")
         h2.api._lock_path = tmp_path / "migration.lock"
         with pytest.raises(MigrationLockError):
             h2.api.migrate()
         h.api.release_lock()
-        # после снятия — доступен
         h2.api.detect()
 
     def test_scenario_5_stale_lock(self, tmp_path: Path) -> None:
-        """Stale lock -> авто-снятие -> успешный запуск."""
         import json
         h = _Harness(tmp_path)
         h.corpus()
@@ -193,7 +184,6 @@ class TestMigrationIntegration:
         assert not lock.exists()
 
     def test_scenario_6_future_version_abort(self, tmp_path: Path) -> None:
-        """Неизвестная будущая schema_version -> ABORT, без backup/rollback."""
         h = _Harness(tmp_path, versions=[99])
         h.corpus()
         with pytest.raises(MigrationError):
@@ -202,7 +192,6 @@ class TestMigrationIntegration:
         assert h.api.status().startswith("FAILED")
 
     def test_scenario_7_legacy_documents(self, tmp_path: Path) -> None:
-        """Документы без version -> детектируются как v1 (legacy)."""
         h = _Harness(tmp_path, versions=[1])
         h.corpus()
         info = h.api.detect()
@@ -210,21 +199,18 @@ class TestMigrationIntegration:
         assert info.pending == ["001_mig"]
 
     def test_scenario_8_append_only_history(self, tmp_path: Path) -> None:
-        """Несколько applied/rollback/попыток — ничего не удаляется."""
         h = _Harness(tmp_path)
         h.corpus()
-        h.api.migrate()          # applied
-        h.versions[0] = 1        # «откат данных» имитация
-        h.api.migrate()          # повторная попытка applied
+        h.api.migrate()
+        h.versions[0] = 1
+        h.api.migrate()
         records = h.api.history()
         applied_count = sum(1 for r in records if r.status == "applied")
-        assert applied_count >= 2  # два прогона — две записи applied
-        # append-only: журнал ничего не удаляет
+        assert applied_count >= 2
         assert not hasattr(MigrationHistory, "clear")
         assert not hasattr(MigrationHistory, "remove")
 
     def test_scenario_9_backup_keep_n(self, tmp_path: Path) -> None:
-        """keep-N: старые удаляются, актуальные остаются."""
         h = _Harness(tmp_path)
         h.corpus()
         h.api.backup("001_mig", 2)
@@ -232,32 +218,27 @@ class TestMigrationIntegration:
         h.api.backup("003_final", 4)
         h.api.backup("004_latest", 5)
         dirs = sorted(p.name for p in (tmp_path / "backup").iterdir())
-        # keep-N=3: старейший удалён, актуальные остались
         assert dirs == ["002_next_3", "003_final_4", "004_latest_5"]
         assert "001_mig_2" not in dirs
 
     def test_scenario_10_rollback_no_stale_derivatives(self, tmp_path: Path) -> None:
-        """После rollback индекс/снимок НЕ восстанавливаются, а пересоздаются."""
         h = _Harness(tmp_path)
         project = h.corpus()
         h.api.backup("001_mig", 2)
         h.api.rollback()
-        assert h.index.validate(project).valid is True   # пересоздан
-        assert h.snap.load(project) is not None          # пересоздан
-        # событие rollback в журнале
+        assert h.index.validate(project).valid is True
+        assert h.snap.load(project) is not None
         assert any(r.status == "rollback" for r in h.api.history())
 
     def test_scenario_11_retrieval_after_rollback(self, tmp_path: Path) -> None:
-        """После rollback retrieval работает и совпадает со Snapshot."""
         h = _Harness(tmp_path)
         project = h.corpus()
         h.api.backup("001_mig", 2)
         h.api.rollback()
         items = h.query(project, "udp")
-        assert len(items) >= 1  # поиск работает
+        assert len(items) >= 1
         snapshot = h.snap.load(project)
         assert snapshot is not None
-        # каноническое знание в снимке и в результатах поиска
         snapshot_titles: list[str] = []
         canonical = (snapshot.sections or {}).get("Canonical Knowledge", [])
         if isinstance(canonical, list):
