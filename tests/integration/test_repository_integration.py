@@ -18,6 +18,7 @@ from hkos.repository.models import (
     Project,
 )
 from hkos.repository.repository_manager import RepositoryManager
+from hkos.services.librarian.librarian import Librarian
 from hkos.storage import StorageEngine
 
 
@@ -35,6 +36,7 @@ class TestRepositoryIntegration:
 
     def test_full_chain(self, tmp_path: Path) -> None:
         manager, engine = self._manager(tmp_path)
+        librarian = Librarian(repositories=manager, logger=HKOSLogger())
 
         # Project
         project = manager.projects.save(
@@ -49,11 +51,11 @@ class TestRepositoryIntegration:
         state = manager.campaigns.close_campaign(project.id, campaign.id)
         assert state.status == CAMPAIGN_STATUS_CLOSED
 
-        # Knowledge
+        # Knowledge — archive через Librarian (единственный lifecycle-оркестратор)
         k = manager.knowledge.create(
             Knowledge(project=project.id, title="TProxy UDP", kind="fact", tags=["tproxy"])
         )
-        manager.knowledge.archive(project.id, k.id)
+        librarian.archive(project.id, k.id)
         assert manager.knowledge.load(project.id, k.id).status == KNOWLEDGE_STATUS_ARCHIVED
 
         # Decision
