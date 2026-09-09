@@ -48,6 +48,7 @@ class TestRetrievalEngine:
         k2 = lib.register(
             p.id, Knowledge(title="TUN breaks DNS", body="dns", kind="negative", tags=["tun"]),
         )
+        lib.verify(p.id, k1.id)
         lib.canonicalize(p.id, k1.id)
         IndexEngine(repos, IndexStore(engine), HKOSLogger()).build(p.id)
         return p, k1, k2
@@ -115,7 +116,6 @@ class TestRetrievalEngine:
 
     def test_scope_error_without_project(self, tmp_path: Path) -> None:
         engine, repos, lib, rv = self._ctx(tmp_path)
-        # без registry и без project_id -> RetrievalScopeError
         unscoped = RetrievalEngine(
             repos, IndexQueryExecutor(IndexStore(engine)), ConfigLoader(profile="development"),
             HKOSLogger(), project_registry={},
