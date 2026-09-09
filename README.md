@@ -26,7 +26,7 @@ embedding model is required.
 ## Why HKOS exists
 
 LLM agent memory solutions today are typically **LLM-dependent**: embeddings,
-model-generated "memories", and vector stores that only mean something to the
+model-generated “memories”, and vector stores that only mean something to the
 model that produced them. That design has a hard ceiling:
 
 - memory quality silently changes when you swap the model;
@@ -43,43 +43,43 @@ organization needs — not a black box.
 ## Architecture
 
 ```
-                        ┌───────────────────────────────────────────┐
+                        ┌─────────────────────────────────────────────┐
                         │ integration/   Hermes Agent adapters       │
                         │ migration/     schema migration FSM,       │
                         │                backup / rollback           │
-                        └──────────────────────┬────────────────────┘
-                                               ▼
-                        ┌───────────────────────────────────────────┐
+                        └──────────────────────┴────────────────────┘
+                                               ↓
+                        ┌─────────────────────────────────────────────┐
                         │ services/  Project · Campaign (FSM) ·      │
                         │            Librarian · MemoryService       │
-                        └──────────────────────┬────────────────────┘
-              ┌────────────────────────────────┼────────────────────────────────┐
-              ▼                                ▼                                ▼
+                        └──────────────────────┴────────────────────┘
+              ┌─────────────────────────┼────────────────────────────────────────────┐
+              ↓                                ↓                                ↓
        retrieval/                       context/                        snapshot/
        deterministic ranking           context builder                 derived state,
        with explanations               (profiles, budgets)            versioned & diffed
-              └────────────────────────────────┼────────────────────────────────┘
-                                               ▼
-                        ┌───────────────────────────────────────────┐
+              └────────────────────────┼────────────────────────────────────────────┘
+                                               ↓
+                        ┌─────────────────────────────────────────────┐
                         │ index/    5 indexes, Query Contract Q1–Q5, │
                         │           IndexCache (warm ≈ O(1))         │
-                        └──────────────────────┬────────────────────┘
-                                               ▼
-                        ┌───────────────────────────────────────────┐
+                        └──────────────────────┴────────────────────┘
+                                               ↓
+                        ┌─────────────────────────────────────────────┐
                         │ repository/  JSON Repository — the ONLY    │
                         │              source of truth (SSOT)        │
-                        └──────────────────────┬────────────────────┘
-                                               ▼
-                        ┌───────────────────────────────────────────┐
+                        └──────────────────────┴────────────────────┘
+                                               ↓
+                        ┌─────────────────────────────────────────────┐
                         │ storage/   StorageEngine, JSONStore,       │
                         │            HKOS-08 envelopes               │
-                        └──────────────────────┬────────────────────┘
-                                               ▼
-                        ┌───────────────────────────────────────────┐
+                        └──────────────────────┴────────────────────┘
+                                               ↓
+                        ┌─────────────────────────────────────────────┐
                         │ core/ · kernel/ · performance/             │
                         │ engine, config, logging · shared types ·   │
                         │ metrics & profiling (zero business logic)  │
-                        └───────────────────────────────────────────┘
+                        └─────────────────────────────────────────────┘
 ```
 
 Dependencies flow strictly downward. `services/` orchestrates; `migration/` is
@@ -108,9 +108,9 @@ a maintenance layer on top; `performance/` measures but never mutates.
 
 ## Knowledge lifecycle
 
-The diagram below is the target contract defined by
-[`ADR-001`](docs/design/adr-001-knowledge-integrity-contract.md). Known v1.2
-deviations are executable XFAIL contracts and will be removed during v1.3.
+The diagram below is the contract defined by
+[`ADR-001`](docs/design/adr-001-knowledge-integrity-contract.md),
+fully implemented as of v1.3.
 
 ```
 register ──► NEW ──► VERIFIED ──► CANONICAL ──► ARCHIVED
@@ -180,7 +180,7 @@ OK
 ```
 
 Note how the **negative knowledge** (the FAILURE entry) is what the retriever
-returns for a query about a problem — that is HKOS's core value: past mistakes
+returns for a query about a problem — that is HKOS’s core value: past mistakes
 are reused before they are repeated.
 
 ## Performance
@@ -208,7 +208,7 @@ Measured on a stock Linux workstation, corpus generated deterministically
 - **1,000+ automated tests** across unit, integration, architecture, and
   system suites (pipeline, lifecycle, consistency, failure recovery,
   concurrent agents, migration, security, and stress).
-- **mypy --strict: 0 errors** across 453 files.
+- **mypy --strict: 0 errors** across the full source tree.
 - **ruff: 0 functional findings** (docstring style only).
 - **compileall: clean.**
 - All layers tested at unit + integration level; system tests exercise only
@@ -227,7 +227,7 @@ Measured on a stock Linux workstation, corpus generated deterministically
 | Crash-safe | atomic writes, `kill -9`-proof | — | — |
 | Explains why an item was retrieved | yes (reason/score per item) | no | no |
 
-**In one sentence:** most agent-memory tools make memory *another model's
+**In one sentence:** most agent-memory tools make memory *another model’s
 output*; HKOS makes memory *your engineering data* — deterministic, versioned,
 auditable, and portable across LLMs.
 
@@ -289,10 +289,18 @@ anything that speaks MCP.
   LangChain/AutoGen), Failure-Priority ranking.
 - **v1.2 (released)** — SQLite index backend (delta writes, `hkos migrate`,
   same API), cross-project relationship traversal (deterministic, via Q4).
-- **Next: v1.3** — Knowledge Integrity contract implementation
-  ([ADR-001](docs/design/adr-001-knowledge-integrity-contract.md)).
-- **Later** — optional semantic candidate providers; the Repository remains
-  the SSOT and deterministic retrieval remains available.
+- **v1.3 (released)** — Knowledge Integrity contract
+  ([ADR-001](docs/design/adr-001-knowledge-integrity-contract.md)) fully
+  implemented: explicit verification lifecycle, concurrency-safe repository
+  writes with revision tracking (`_rev`), single-pass eligibility filter in
+  retrieval, and all nine integrity deviations (KI-001…KI-009) resolved.
+- **Next: v1.4** — Semantic extension & knowledge quality:
+  optional embedding-based candidate provider (additive; deterministic path
+  unchanged, Repository remains SSOT), knowledge freshness / decay policy with
+  `last_confirmed_at` tracking and `FreshnessFactor` in ranking, conflict
+  detection on registration (flags contradicting CANONICAL items,
+  deterministic), and richer CLI (`hkos graph`, `hkos diff --since`,
+  `hkos audit --conflicts`).
 
 ## License
 
