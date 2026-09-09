@@ -16,7 +16,7 @@ class TestVersionManager:
         assert self.vm.version.major == 1
 
     def test_version_info_minor(self) -> None:
-        assert self.vm.version.minor == 2
+        assert self.vm.version.minor == 3
 
     def test_version_info_patch(self) -> None:
         assert self.vm.version.patch == 0

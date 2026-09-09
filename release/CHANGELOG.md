@@ -1,5 +1,32 @@
 # HKOS Changelog
 
+## [1.3.0] — 2026-09-10 (maintenance release — Knowledge Integrity contract)
+
+### Fixed — Knowledge Integrity deviations (ADR-001, KI-001…KI-009)
+
+- **KI-002** — removed the double eligibility filter in `Retriever.run_parsed`:
+  traversal starts from the full ranked set; `KnowledgeFilter` is applied
+  exactly once on the expanded result. Non-canonical items can seed relation
+  paths that lead to canonical knowledge.
+- **KI-004** — explicit verification lifecycle: `verify()` is a required step
+  before `canonicalize()`; the Librarian enforces NEW → VERIFIED → CANONICAL.
+- **KI-006** — removed the legacy `KnowledgeRepository.archive()`; archiving is
+  exclusively a Librarian operation (single write-path invariant).
+- **KI-007** — snapshot diff now includes `body`/content in the comparison key,
+  so body-only changes are detected and reported.
+- **KI-008** — concurrency-safe repository writes: `_rev` revision counter in
+  every envelope, `expected_revision` check in `update()`,
+  `RepositoryConcurrencyError` on conflict.
+- **KI-001, KI-003, KI-005, KI-009** — resolved in patch commits. All XFAIL
+  deviation contracts are green.
+
+### Maintenance — release consistency
+
+- Version markers aligned to 1.3.0 (pyproject, `core/constants.py`, `VERSION`,
+  configs, manifests, changelog, release notes, version-asserting tests).
+- Drop-in replacement for v1.2.x: no storage migration required, existing JSON
+  repositories fully compatible.
+
 ## [1.2.0] — 2026-09-08 (feature release, DS-017 v1.2)
 
 ### Maintenance — release consistency

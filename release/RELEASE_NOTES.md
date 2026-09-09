@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-19
 
-> This document records the v1.0.0 release. The current release is v1.2.0;
-> see [RELEASE_NOTES_1.2.0.md](RELEASE_NOTES_1.2.0.md).
+> This document records the v1.0.0 release. The current release is v1.3.0;
+> see [RELEASE_NOTES_1.3.0.md](RELEASE_NOTES_1.3.0.md).
 
 ## What this is
 
