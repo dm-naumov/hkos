@@ -23,6 +23,32 @@ core <- storage <- repository <- index <- retrieval/context/snapshot
 - **performance**: PerformanceManager + MetricsEngine/LatencyTracker/Profiler/ResourceMonitor/CacheManager/ContextOptimizer/integration wrappers. Measurement only; zero business logic.
 - **kernel**: SnapshotDocument (shared type).
 
+
+## Knowledge Integrity Contract
+
+Target integrity contract for lifecycle, retrieval eligibility and the
+write path — see
+[ADR-001 — Knowledge Integrity Contract](design/adr-001-knowledge-integrity-contract.md).
+v1.2.0 implements it incrementally; known deviations are tracked as
+KI-001…KI-009 with characterization and executable contract tests.
+
+- Repository is canonical (SSOT); indexes/snapshots/manifests/caches are
+  rebuildable derived projections.
+- Retrieval eligibility is explicit: ordinary retrieval/agent context
+  admits CANONICAL only (positive rule, not a denylist).
+- Graph traversal cannot bypass eligibility: relation-added candidates
+  pass the same policy as direct candidates.
+- Observation is not canonical knowledge: agent writes start as NEW;
+  verification (NEW → VERIFIED) and canonicalization (VERIFIED → CANONICAL)
+  are separate actions.
+- One authoritative status vocabulary (uppercase); legacy lowercase values
+  are normalized at the read boundary only.
+- Revision, temporal validity and provenance are planned additive
+  extensions; retrieval explanation (why_retrieved) is distinct from
+  provenance/trust (why_trusted).
+- Semantic retrieval, when added, is a candidate provider only — never a
+  source of truth, never required by the deterministic core.
+
 ## Key invariants
 
 - Repository = SSOT; Index/Snapshot/Manifest/Cache are derived (rebuildable).
