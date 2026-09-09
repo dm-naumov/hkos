@@ -72,6 +72,7 @@ def main() -> int:
     ]
     ids = [librarian.register(project.id, k).id for k in memory]
     for k_id in ids:
+        librarian.verify(project.id, k_id)
         librarian.canonicalize(project.id, k_id)
     print(f"memory: {len(ids)} items saved (FAILURE + DECISION + FACT)")
 

@@ -46,7 +46,7 @@
 
 - ProjectManager: create/info/list/update/close/archive/...
 - CampaignManager: create/open/pause/resume/close/status (FSM CREATED→…→COMPLETED)
-- Librarian: register/update/canonicalize/merge/archive/restore/reject/
+- Librarian: register/update/verify/canonicalize/merge/archive/restore/reject/
   detect_conflicts/recalculate_confidence/history/validate/
   validate_relations/explain_category
 - KnowledgeClassifier: classify(knowledge); classify_with_rule(knowledge) →

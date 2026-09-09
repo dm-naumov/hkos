@@ -39,5 +39,6 @@ def seed_engineering_memory(
         tags=["openwrt", "routing"], kind="negative",
         source_campaign=campaign_id))
     for k in (decision, configuration, failure):
+        ctx.librarian.verify(project_id, k.id)
         ctx.librarian.canonicalize(project_id, k.id)
     return [decision.id, configuration.id, failure.id]

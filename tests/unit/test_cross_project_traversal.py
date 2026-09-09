@@ -50,6 +50,7 @@ class CrossProjectFixture:
             a_pid, Knowledge(
                 title="tcp window scaling breaks nat", body="fact about mtu",
                 tags=["mtu"]))
+        self.librarian.verify(a_pid, fact.id)
         self.librarian.canonicalize(a_pid, fact.id)
         self.index.build(a_pid)
         decision = self.librarian.register(
@@ -63,6 +64,7 @@ class CrossProjectFixture:
                     target_id=fact.id,
                     target_project_id=a_pid,
                 )]))
+        self.librarian.verify(b_pid, decision.id)
         self.librarian.canonicalize(b_pid, decision.id)
         self.index.build(b_pid)
         return a_pid, b_pid

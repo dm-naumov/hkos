@@ -57,6 +57,7 @@ class TestLibrarianRelationsIntegration:
         assert merged.parent_ids == [a.id, b.id]
 
         # Canonical: C создан CANONICAL (merge); канонизация A допустима
+        lib.verify("p1", a.id)
         canonical_a = lib.canonicalize("p1", a.id)
         assert canonical_a.status == KNOWLEDGE_STATUS_CANONICAL
 

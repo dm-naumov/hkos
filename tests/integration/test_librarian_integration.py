@@ -62,7 +62,8 @@ class TestLibrarianIntegration:
         lib, engine = self._librarian(tmp_path)
         a = lib.register("p1", Knowledge(title="TProxy UDP works", body="..."))
         assert engine.exists(f"projects/p1/knowledge/{a.id}.json")
-        # канонизация включает верификацию: NEW -> VERIFIED -> CANONICAL
+        # Верификация и канонизация — отдельные публичные действия.
+        lib.verify("p1", a.id)
         canonical = lib.canonicalize("p1", a.id)
         assert canonical.status == KNOWLEDGE_STATUS_CANONICAL
         assert KnowledgeStatus.is_canonical(canonical)
@@ -126,6 +127,7 @@ class TestLibrarianIntegration:
         monkeypatch.setattr(json_mod, "dump", fail)
 
         k = lib.register("p1", Knowledge(title="X", body=""))
+        lib.verify("p1", k.id)
         lib.canonicalize("p1", k.id)
         lib.archive("p1", k.id)
         assert lib.validate("p1", k.id).valid is True

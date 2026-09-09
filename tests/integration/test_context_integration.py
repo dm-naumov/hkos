@@ -54,6 +54,7 @@ class TestContextIntegration:
         k = lib.register(p.id, Knowledge(
             title="UDP fix", body="fwmark udp", tags=["udp"], confirmations=8,
         ))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         index.build(p.id)
         result = rv.retrieve("udp", project_id=p.id, top_n=10)
@@ -79,6 +80,7 @@ class TestContextIntegration:
         knowledge = lib.register(p.id, Knowledge(
             title="Terminal blocks", body="phoenix", tags=["terminal"],
         ))
+        lib.verify(p.id, knowledge.id)
         lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         snapshot = SnapshotDocument(
@@ -106,6 +108,7 @@ class TestContextIntegration:
                 title=f"UDP knowledge {i}", body=f"udp topic {i}",
                 tags=["udp"], confirmations=i,
             ))
+            lib.verify(p.id, knowledge.id)
             lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         result = rv.retrieve("udp", project_id=p.id, top_n=30)
@@ -120,6 +123,7 @@ class TestContextIntegration:
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         knowledge = lib.register(
             p.id, Knowledge(title="UDP best", body="udp", tags=["udp"]))
+        lib.verify(p.id, knowledge.id)
         lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         result = rv.retrieve("udp", project_id=p.id, top_n=10)

@@ -36,6 +36,7 @@ from hkos.services.librarian.knowledge_history import (
     EVENT_REJECTED,
     EVENT_RESTORED,
     EVENT_UPDATED,
+    EVENT_VERIFIED,
     KnowledgeHistory,
 )
 from hkos.services.librarian.knowledge_merger import KnowledgeMerger
@@ -57,7 +58,7 @@ class Librarian:
     """Оркестратор жизненного цикла Knowledge (единственная точка изменений).
 
     Публичный API (ровно эти методы):
-        register, update, canonicalize, merge, archive, restore, reject,
+        register, update, verify, canonicalize, merge, archive, restore, reject,
         detect_conflicts, recalculate_confidence, history, validate,
         validate_relations, explain_category
     """
@@ -306,20 +307,28 @@ class Librarian:
         self._log(f"KnowledgeUpdated: {knowledge.id}")
         return saved
 
-    def canonicalize(self, project_id: str, knowledge_id: str) -> Knowledge:
-        """Канонизировать Knowledge.
+    def verify(self, project_id: str, knowledge_id: str) -> Knowledge:
+        """Верифицировать Knowledge отдельным действием (NEW -> VERIFIED)."""
+        knowledge = self._load(project_id, knowledge_id)
+        if KnowledgeStatus.is_verified(knowledge) or KnowledgeStatus.is_canonical(knowledge):
+            return knowledge
+        self._transition(knowledge, KNOWLEDGE_STATUS_VERIFIED)
+        KnowledgeHistory.append(knowledge, EVENT_VERIFIED)
+        saved = self._save(knowledge)
+        self._log(f"KnowledgeVerified: {knowledge_id}")
+        return saved
 
-        Канонизация включает верификацию: NEW -> VERIFIED -> CANONICAL
-        (отдельного публичного метода verify() в API DS-006 нет).
-        Из VERIFIED -> CANONICAL напрямую.
+    def canonicalize(self, project_id: str, knowledge_id: str) -> Knowledge:
+        """Канонизировать отдельно верифицированное Knowledge (VERIFIED -> CANONICAL).
+
+        Требует предварительной верификации через verify(). Идемпотентен:
+        повторная канонизация уже канонического знания — no-op.
         """
         knowledge = self._load(project_id, knowledge_id)
-        # Идемпотентность (Post-Audit Refinement): повторная канонизация
-        # уже канонического знания — no-op, без исключения.
+        # Идемпотентность: повторная канонизация уже канонического знания —
+        # no-op, без исключения.
         if KnowledgeStatus.is_canonical(knowledge):
             return knowledge
-        if KnowledgeStatus.is_new(knowledge):
-            self._transition(knowledge, KNOWLEDGE_STATUS_VERIFIED)
         self._transition(knowledge, KNOWLEDGE_STATUS_CANONICAL)
         KnowledgeHistory.append(knowledge, EVENT_CANONICALIZED)
         saved = self._save(knowledge)

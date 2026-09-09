@@ -105,6 +105,7 @@ class _Harness:
         assert p is not None
         k = self.lib.register(p.id, Knowledge(
             title="UDP fix", body="udp", tags=["udp"], confirmations=8))
+        self.lib.verify(p.id, k.id)
         self.lib.canonicalize(p.id, k.id)
         self.index.build(p.id)
         return p.id
@@ -146,7 +147,7 @@ class TestMigrationIntegration:
             h.api.migrate()
         assert h.api.status().startswith("FAILED")
         after = sorted(p.name for p in knowledge_dir.iterdir())
-        assert before == after  # Repository полностью восстановлен
+        assert before == after  # Repository ��олностью восстановлен
         # rollback события в журнале
         statuses = [r.status for r in h.api.history()]
         assert "rollback" in statuses

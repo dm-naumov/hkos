@@ -98,6 +98,7 @@ def main() -> int:
     ]
     ids = [librarian.register(project.id, k).id for k in items]
     for k_id in ids:
+        librarian.verify(project.id, k_id)
         librarian.canonicalize(project.id, k_id)
     print(f"knowledge registered & canonicalized: {len(ids)}")
 

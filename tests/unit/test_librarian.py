@@ -80,12 +80,22 @@ class TestLibrarian:
         with pytest.raises(KnowledgeNotFoundError):
             lib.update("p1", Knowledge(id="11111111-2222-3333-4444-555555555555", title="X"))
 
-    def test_canonicalize_includes_verification(self, tmp_path: Path) -> None:
+    def test_verify_then_canonicalize(self, tmp_path: Path) -> None:
         lib, _ = self._librarian(tmp_path)
         k = lib.register("p1", Knowledge(title="X"))
+        verified = lib.verify("p1", k.id)
+        assert verified.status == KNOWLEDGE_STATUS_VERIFIED
+        assert verified.history[-1].event == "Verified"
         canonical = lib.canonicalize("p1", k.id)
         assert canonical.status == KNOWLEDGE_STATUS_CANONICAL
-        assert canonical.history[-1].event == "Canonicalized"
+        assert [entry.event for entry in canonical.history][-2:] == [
+            "Verified", "Canonicalized"]
+
+    def test_canonicalize_new_forbidden(self, tmp_path: Path) -> None:
+        lib, _ = self._librarian(tmp_path)
+        k = lib.register("p1", Knowledge(title="X"))
+        with pytest.raises(KnowledgeStatusError):
+            lib.canonicalize("p1", k.id)
 
     def test_canonicalize_from_rejected_forbidden(self, tmp_path: Path) -> None:
         lib, _ = self._librarian(tmp_path)
@@ -97,6 +107,7 @@ class TestLibrarian:
     def test_category_immutable_after_canonicalization(self, tmp_path: Path) -> None:
         lib, _ = self._librarian(tmp_path)
         k = lib.register("p1", Knowledge(title="X"), category="FACT")
+        lib.verify("p1", k.id)
         lib.canonicalize("p1", k.id)
         k2 = lib._load("p1", k.id)
         k2.category = "RULE"  # попытка смены
@@ -203,13 +214,13 @@ class TestLibrarian:
         assert category == "FAILURE"
         assert rule == "rule:kind:negative"
 
-    def test_exactly_thirteen_public_methods(self, tmp_path: Path) -> None:
-        """Ровно 13 публичных методов (DS-017 ЭТАП 2/4: validate_relations,
+    def test_exactly_fourteen_public_methods(self, tmp_path: Path) -> None:
+        """Ровно 14 публичных методов (DS-017 ЭТАП 2/4: validate_relations,
         explain_category)."""
         lib, _ = self._librarian(tmp_path)
         api = {name for name in dir(lib) if not name.startswith("_")}
         assert api == {
-            "register", "update", "canonicalize", "merge", "archive",
+            "register", "update", "verify", "canonicalize", "merge", "archive",
             "restore", "reject", "detect_conflicts",
             "recalculate_confidence", "history", "validate",
             "validate_relations", "explain_category",

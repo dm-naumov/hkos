@@ -11,7 +11,7 @@ Architecture (DS-006A §7): Provider Pattern.
 
 Запрещены delete/update/rewrite существующих записей.
 Каждое изменение Knowledge — новая запись.
-События: Created, Updated, Canonicalized, Merged, Archived,
+События: Created, Updated, Verified, Canonicalized, Merged, Archived,
 Restored, Rejected, Conflict detected, Confidence changed.
 """
 
@@ -22,6 +22,7 @@ from hkos.repository.models import Knowledge, KnowledgeHistoryEntry
 __all__ = [
     "EVENT_CREATED",
     "EVENT_UPDATED",
+    "EVENT_VERIFIED",
     "EVENT_CANONICALIZED",
     "EVENT_MERGED",
     "EVENT_ARCHIVED",
@@ -36,6 +37,7 @@ __all__ = [
 
 EVENT_CREATED: Final[str] = "Created"
 EVENT_UPDATED: Final[str] = "Updated"
+EVENT_VERIFIED: Final[str] = "Verified"
 EVENT_CANONICALIZED: Final[str] = "Canonicalized"
 EVENT_MERGED: Final[str] = "Merged"
 EVENT_ARCHIVED: Final[str] = "Archived"

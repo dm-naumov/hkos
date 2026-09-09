@@ -38,10 +38,10 @@ from hkos.services.librarian import Librarian
 from hkos.services.librarian.knowledge_history import (
     EVENT_CANONICALIZED,
     EVENT_CREATED,
+    EVENT_VERIFIED,
 )
 from hkos.services.librarian.knowledge_status import (
     KNOWLEDGE_STATUS_ARCHIVED,
-    KNOWLEDGE_STATUS_CANONICAL,
     KNOWLEDGE_STATUS_NEW,
 )
 from hkos.services.project_manager import ProjectManager
@@ -166,30 +166,18 @@ class TestRegisterAndCanonicalize:
         k = fx.register(pid, "some observation", index_update=False)
         assert k.status == KNOWLEDGE_STATUS_NEW
 
-    def test_canonicalize_new_ends_canonical(self, tmp_path: Path) -> None:
-        """v1.2.0: canonicalize() on NEW ends CANONICAL in one call.
-
-        This is the behavior ADR-001 marks as deviation KI-004 (target:
-        NEW -> VERIFIED -> CANONICAL requires a separate verify step).
-        """
+    def test_verify_then_canonicalize_records_distinct_events(
+        self, tmp_path: Path
+    ) -> None:
+        """Verification and canonicalization are separate public actions."""
         fx = KnowledgeIntegrityFixture(tmp_path)
         pid = fx.projects.create(name="P", tags=["t"]).id
-        k = fx.register(pid, "claim to canonicalize", index_update=False)
-        canonical = fx.canonicalize(pid, k.id)
-        assert canonical.status == KNOWLEDGE_STATUS_CANONICAL
-
-    def test_history_after_canonicalize_new(self, tmp_path: Path) -> None:
-        """v1.2.0: history shows Created + Canonicalized (no Verified event).
-
-        The implicit NEW -> VERIFIED hop inside canonicalize() is not
-        recorded as a separate verification event.
-        """
-        fx = KnowledgeIntegrityFixture(tmp_path)
-        pid = fx.projects.create(name="P", tags=["t"]).id
-        k = fx.register(pid, "claim with history", index_update=False)
+        k = fx.register(pid, "claim with explicit trust", index_update=False)
+        verified = fx.librarian.verify(pid, k.id)
+        assert verified.status == "VERIFIED"
         canonical = fx.canonicalize(pid, k.id)
         events = [entry.event for entry in canonical.history]
-        assert events == [EVENT_CREATED, EVENT_CANONICALIZED], events
+        assert events == [EVENT_CREATED, EVENT_VERIFIED, EVENT_CANONICALIZED]
 
 
 class TestKnowledgeFilterCurrent:
@@ -302,6 +290,7 @@ class TestGraphTraversalCurrent:
                 target_id=b.id,
             )],
         )
+        fx.librarian.verify(pid, a.id)
         fx.canonicalize(pid, a.id)
         return a.id, b.id
 

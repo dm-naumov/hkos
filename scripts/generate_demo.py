@@ -97,6 +97,7 @@ def main() -> int:
     # Canonicalize everything, build indexes, snapshot
     for p in projects.list():
         for k in repos.knowledge.list(p.id):
+            librarian.verify(p.id, k.id)
             librarian.canonicalize(p.id, k.id)
 
     store = IndexStore(engine)

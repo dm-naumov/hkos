@@ -60,6 +60,7 @@ class TestRetrievalIntegration:
         k4 = lib.register(p.id, Knowledge(
             title="UDP routing fix", body="fwmark udp",
             tags=["udp"], confirmations=8, successful_usage=7))
+        lib.verify(p.id, k4.id)
         lib.canonicalize(p.id, k4.id)
         k5 = lib.register(p.id, Knowledge(
             title="Old approach", body="obsolete", tags=["udp"]))
@@ -99,6 +100,7 @@ class TestRetrievalIntegration:
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         knowledge = lib.register(
             p.id, Knowledge(title="TProxy UDP", body="udp", tags=["udp"]))
+        lib.verify(p.id, knowledge.id)
         lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         rv = RetrievalEngine(
@@ -115,6 +117,7 @@ class TestRetrievalIntegration:
         knowledge = lib.register(p.id, Knowledge(
             title="Phoenix terminal blocks", body="industrial automation",
             tags=["terminal"], confirmations=3))
+        lib.verify(p.id, knowledge.id)
         lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         result = rv.search("аналог Phoenix Contact", project_id=p.id)
@@ -126,6 +129,7 @@ class TestRetrievalIntegration:
         k = lib.register(p.id, Knowledge(
             title="Campaign result", body="tproxy udp", tags=["udp"],
             source_campaign="camp-17", confirmations=2))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         lib.register(p.id, Knowledge(
             title="Other", body="udp", tags=["udp"], confirmations=1))
@@ -167,6 +171,7 @@ class TestRetrievalIntegration:
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         canonical = lib.register(p.id, Knowledge(
             title="UDP best practice", body="udp", tags=["udp"], confirmations=4))
+        lib.verify(p.id, canonical.id)
         lib.canonicalize(p.id, canonical.id)
         lib.register(p.id, Knowledge(
             title="UDP note", body="udp", tags=["udp"], confirmations=6))

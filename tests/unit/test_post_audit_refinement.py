@@ -35,6 +35,7 @@ class TestLifecycleIdempotency:
         """Повторный canonicalize(canonical) — no-op, без исключения."""
         repos, lib, project = self._ctx(tmp_path)
         k = lib.register(project, Knowledge(title="UDP", body="udp", tags=["udp"]))
+        lib.verify(project, k.id)
         first = lib.canonicalize(project, k.id)
         # Повторная канонизация не бросает и не меняет результат
         second = lib.canonicalize(project, k.id)

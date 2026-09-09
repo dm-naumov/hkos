@@ -83,6 +83,7 @@ class TestSnapshotIntegration:
         k = lib.register(p.id, Knowledge(
             title="UDP fix", body="udp", tags=["udp"], confirmations=8,
         ))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         index.build(p.id)
         snapshot = snap.create(
@@ -100,6 +101,7 @@ class TestSnapshotIntegration:
         k = lib.register(p.id, Knowledge(
             title="UDP fix", body="udp", tags=["udp"], confirmations=8,
         ))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         index.build(p.id)
         snap.create(p.id, reason="initial")
@@ -127,6 +129,7 @@ class TestSnapshotIntegration:
         index.build(p.id)
         a = snap.create(p.id, reason="initial")
         k = lib.register(p.id, Knowledge(title="New canonical", body="n", tags=["n"]))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         index.update(p.id, k.id, "knowledge")
         b = snap.update(p.id, reason="added_canonical")
@@ -175,6 +178,7 @@ class TestSnapshotIntegration:
 
         # вторая версия для diff
         k = lib.register(p.id, Knowledge(title="Delta", body="d", tags=["d"]))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         index.update(p.id, k.id, "knowledge")
         second = snap.update(p.id)

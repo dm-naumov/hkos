@@ -29,6 +29,7 @@ def canonical_system_knowledge(
     ) -> Knowledge:
         """Register and promote trusted system-test knowledge."""
         saved = original_register(self, project_id, knowledge, category)
+        self.verify(project_id, saved.id)
         return self.canonicalize(project_id, saved.id)
 
     monkeypatch.setattr(Librarian, "register", register_canonical)

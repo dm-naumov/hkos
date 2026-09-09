@@ -77,6 +77,7 @@ class TestMigrationValidator:
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         assert p is not None
         k = lib.register(p.id, Knowledge(title="UDP fix", body="udp", tags=["udp"]))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         index.build(p.id)
         return p.id
@@ -127,7 +128,6 @@ class TestMigrationValidator:
         from hkos.kernel.snapshot_document import SnapshotDocument
 
         correct = snap.create(project, reason="post")
-        # сохранить поверх снимок с неверной статистикой (тот же id)
         broken = SnapshotDocument(
             snapshot_id=correct.snapshot_id, project_id=project,
             statistics={"knowledge": 999},

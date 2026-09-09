@@ -142,6 +142,7 @@ class HermesProductionHooks:
             # canonicalization: NEW -> VERIFIED -> CANONICAL
             all_ids = list(result.saved) + list(result.failures)
             for knowledge_id in all_ids:
+                self._librarian.verify(project_id, knowledge_id)
                 self._librarian.canonicalize(project_id, knowledge_id)
                 self._index.update(project_id, knowledge_id, "knowledge")
             if update_snapshot:

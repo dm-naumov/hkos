@@ -166,6 +166,7 @@ class TestGraphEligibility:
             relations=[KnowledgeRelation(
                 relation_type=RelationType.REFERENCE_TO,
                 source_id="", target_id=b.id)])
+        fx.librarian.verify(pid, a.id)
         fx.canonicalize(pid, a.id)
 
         result = fx.retrieval.retrieve("alpha", project_id=pid, top_n=10)
@@ -191,13 +192,6 @@ class TestObservationAndCanonicalization:
         })
         assert result["status"] != KNOWLEDGE_STATUS_CANONICAL
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "KNOWN-DEVIATION KI-004: canonicalize(NEW) silently hops "
-            "NEW -> VERIFIED -> CANONICAL without a public verify"
-        ),
-    )
     def test_new_cannot_be_canonicalized_without_verify(
         self, tmp_path: Path
     ) -> None:

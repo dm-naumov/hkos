@@ -43,6 +43,7 @@ class TestReleaseAcceptance:
             title="FailureRC udp", body="cause: WARP\nrecommendations: VLESS",
             tags=["warp", "udp"], kind="negative", source_campaign=c1.id))
         for k in (decision, failure):
+            ctx.librarian.verify(project.id, k.id)
             ctx.librarian.canonicalize(project.id, k.id)
         # Index -> Snapshot
         ctx.index.build(project.id)
@@ -52,6 +53,7 @@ class TestReleaseAcceptance:
         assert len(result.items) >= 2
         saved = ctx.librarian.register(project.id, Knowledge(
             title="SavedRC udp", body="llm", tags=["udp"]))
+        ctx.librarian.verify(project.id, saved.id)
         ctx.librarian.canonicalize(project.id, saved.id)
         ctx.index.update(project.id, saved.id, "knowledge")
         snapshots.create(project.id, reason="rc-v2", force=True)
