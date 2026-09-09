@@ -294,13 +294,20 @@ anything that speaks MCP.
   implemented: explicit verification lifecycle, concurrency-safe repository
   writes with revision tracking (`_rev`), single-pass eligibility filter in
   retrieval, and all nine integrity deviations (KI-001…KI-009) resolved.
-- **Next: v1.4** — Semantic extension & knowledge quality:
-  optional embedding-based candidate provider (additive; deterministic path
-  unchanged, Repository remains SSOT), knowledge freshness / decay policy with
-  `last_confirmed_at` tracking and `FreshnessFactor` in ranking, conflict
-  detection on registration (flags contradicting CANONICAL items,
-  deterministic), and richer CLI (`hkos graph`, `hkos diff --since`,
-  `hkos audit --conflicts`).
+- **Next: v1.4** — Knowledge Quality & Observability:
+  knowledge freshness / decay policy with `last_confirmed_at` tracking and
+  `FreshnessFactor` in ranking; retrieval feedback loop (mark results as
+  useful / not useful, feeds into per-item score adjustments); structured
+  FAILURE schema (explicit `cause` / `fix` / `workaround` fields as first-class
+  data, not free text); richer CLI (`hkos graph`, `hkos diff --since`,
+  `hkos audit`).
+- **v2.0** — Collaboration & Scale: multi-user knowledge bases, shared
+  projects with permissions, knowledge federation across HKOS instances,
+  team-level CANONICAL review workflow.
+- **Later** — Semantic Bridge: optional embedding-based candidate provider
+  (additive; deterministic path unchanged, Repository remains SSOT), semantic
+  conflict detection, knowledge clustering. Intelligence Loop: automated
+  knowledge quality scoring from agent outcomes, knowledge marketplace.
 
 ## License
 
