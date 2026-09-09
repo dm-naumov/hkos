@@ -14,6 +14,7 @@ Two properties are verified via mocked collaborators:
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 from hkos.retrieval.retriever import Retriever
@@ -25,9 +26,9 @@ from hkos.retrieval.retriever import Retriever
 
 def _wire(
     *,
-    ranked: list,
-    expanded: list,
-    eligible: list,
+    ranked: list[Any],
+    expanded: list[Any],
+    eligible: list[Any],
 ) -> tuple[Retriever, MagicMock, MagicMock]:
     """Return (retriever, filter_mock, traverser_mock) with canned returns."""
     parsed = MagicMock()
