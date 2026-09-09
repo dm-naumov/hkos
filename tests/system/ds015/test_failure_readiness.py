@@ -43,6 +43,7 @@ _KILL_SCRIPT = "\n".join([
     "for i in range(10):",
     "    knowledge = lib.register(p.id, Knowledge(",
     "        title=f'KF{i}fact udp', body='udp', tags=['udp']))",
+    "    lib.verify(p.id, knowledge.id)",
     "    lib.canonicalize(p.id, knowledge.id)",
     "import os",
     "os._exit(1)  # имитация kill -9",
@@ -63,7 +64,7 @@ class TestFailureReadiness:
         from hkos.storage.exceptions import StorageSerializationError
         with pytest.raises(StorageSerializationError):
             ctx.retrieval.retrieve("AFact", project_id=project.id)
-        assert ctx.repos.knowledge.count(project.id) == 1
+        assert ctx.repos.knowledge.count(project.id) == 1  # Repository цел
         ctx.index.rebuild(project.id)
         assert_retrievable(ctx, project.id, "AFact", "AFact")
 
@@ -81,12 +82,13 @@ class TestFailureReadiness:
             snapshot_id="snapshot-00001", project_id=project.id,
             statistics={"knowledge": 999}).as_dict())
         corrupted = snapshots.load(project.id)
-        assert int(corrupted.statistics.get("knowledge", 0)) == 999
-        assert ctx.repos.knowledge.count(project.id) == 1
+        assert int(corrupted.statistics.get("knowledge", 0)) == 999  # invalid
+        assert ctx.repos.knowledge.count(project.id) == 1  # Repository не изменён
         snapshots.create(project.id, reason="recovered", force=True)
         assert int(snapshots.load(project.id).statistics.get("knowledge", 0)) == 1
 
     def test_scenario_c_cache_corruption(self, tmp_path: Path) -> None:
+        """Cache corruption: инвалидация; данные из SSOT; Knowledge цел."""
         from hkos.performance.integration import PerformanceIntegration
 
         ctx = create_ds015_context(tmp_path)
@@ -107,6 +109,7 @@ class TestFailureReadiness:
         assert ctx.repos.knowledge.count(project.id) == 20
 
     def test_scenario_d_unexpected_shutdown(self, tmp_path: Path) -> None:
+        """Process killed -> restart: нет частичных записей, нет потери."""
         subprocess.run([sys.executable, "-c", _KILL_SCRIPT, str(tmp_path)],
                        cwd=str(_REPO_ROOT), check=False)
         ctx = create_ds015_context(tmp_path)
