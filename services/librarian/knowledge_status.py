@@ -1,6 +1,7 @@
 """HKOS Knowledge Status (DS-006 §9, IP-006 §10)
 =============================================
-Единственный источник истины о статусах Knowledge и их переходах.
+Машина переходов Knowledge. Канонические значения статусов определены
+в dependency-safe модуле repository.models и импортируются сюда.
 
 Статусы (только эти): NEW, VERIFIED, CANONICAL, SUPERSEDED,
 CONFLICT, REJECTED, ARCHIVED.
@@ -15,7 +16,17 @@ CONFLICT, REJECTED, ARCHIVED.
 
 from typing import Final
 
-from hkos.repository.models import Knowledge
+from hkos.repository.models import (
+    KNOWLEDGE_STATUS_ARCHIVED,
+    KNOWLEDGE_STATUS_CANONICAL,
+    KNOWLEDGE_STATUS_CONFLICT,
+    KNOWLEDGE_STATUS_NEW,
+    KNOWLEDGE_STATUS_REJECTED,
+    KNOWLEDGE_STATUS_SUPERSEDED,
+    KNOWLEDGE_STATUS_VERIFIED,
+    VALID_KNOWLEDGE_STATUSES,
+    Knowledge,
+)
 from hkos.services.librarian.exceptions import KnowledgeStatusError
 
 __all__ = [
@@ -30,24 +41,6 @@ __all__ = [
     "TRANSITIONS",
     "KnowledgeStatus",
 ]
-
-KNOWLEDGE_STATUS_NEW: Final[str] = "NEW"
-KNOWLEDGE_STATUS_VERIFIED: Final[str] = "VERIFIED"
-KNOWLEDGE_STATUS_CANONICAL: Final[str] = "CANONICAL"
-KNOWLEDGE_STATUS_SUPERSEDED: Final[str] = "SUPERSEDED"
-KNOWLEDGE_STATUS_CONFLICT: Final[str] = "CONFLICT"
-KNOWLEDGE_STATUS_REJECTED: Final[str] = "REJECTED"
-KNOWLEDGE_STATUS_ARCHIVED: Final[str] = "ARCHIVED"
-
-VALID_KNOWLEDGE_STATUSES: Final[frozenset[str]] = frozenset({
-    KNOWLEDGE_STATUS_NEW,
-    KNOWLEDGE_STATUS_VERIFIED,
-    KNOWLEDGE_STATUS_CANONICAL,
-    KNOWLEDGE_STATUS_SUPERSEDED,
-    KNOWLEDGE_STATUS_CONFLICT,
-    KNOWLEDGE_STATUS_REJECTED,
-    KNOWLEDGE_STATUS_ARCHIVED,
-})
 
 # Таблица переходов статусов Knowledge (DS-006 §9 + операции Librarian):
 #   NEW -> VERIFIED | CONFLICT | REJECTED | ARCHIVED

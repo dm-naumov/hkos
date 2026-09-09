@@ -7,12 +7,15 @@
 from typing import Any
 
 from hkos.repository.base_repository import BaseRepository
-from hkos.repository.exceptions import RepositoryParseError
+from hkos.repository.exceptions import RepositoryError, RepositoryParseError
 from hkos.repository.models import (
     KNOWLEDGE_STATUS_ARCHIVED,
+    KNOWLEDGE_STATUS_NEW,
+    VALID_KNOWLEDGE_STATUSES,
     Knowledge,
     KnowledgeHistoryEntry,
     KnowledgeRelation,
+    normalize_knowledge_status,
 )
 from hkos.storage.path_manager import PathManager
 
@@ -37,7 +40,12 @@ class KnowledgeRepository(BaseRepository[Knowledge]):
         return PathManager.knowledge_file(self._storage.root, project, object_id)
 
     def _to_data(self, entity: Knowledge) -> dict[str, object]:
-        """Раздел data документа (HKOS-08 §5)."""
+        """Раздел data документа (HKOS-08 §5) with canonical status."""
+        entity.status = normalize_knowledge_status(entity.status)
+        if entity.status not in VALID_KNOWLEDGE_STATUSES:
+            raise RepositoryError(
+                f"Cannot persist invalid Knowledge status: {entity.status!r}"
+            )
         return {
             "id": entity.id,
             "project": entity.project,
@@ -87,6 +95,12 @@ class KnowledgeRepository(BaseRepository[Knowledge]):
             for item in relations_data
             if isinstance(item, dict)
         ]
+        raw_status = data.get("status", KNOWLEDGE_STATUS_NEW)
+        if not isinstance(raw_status, str):
+            raise RepositoryParseError(
+                "Knowledge document has non-string 'status' field"
+            )
+        status = normalize_knowledge_status(raw_status)
         return Knowledge(
             id=data.get("id", ""),
             project=data.get("project", ""),
@@ -94,7 +108,7 @@ class KnowledgeRepository(BaseRepository[Knowledge]):
             title=data.get("title", ""),
             body=data.get("body", ""),
             confidence=data.get("confidence", 0),
-            status=data.get("status", "new"),
+            status=status,
             source_campaign=data.get("source_campaign", ""),
             source_cycle=data.get("source_cycle", 0),
             references=data.get("references", []),
@@ -118,7 +132,7 @@ class KnowledgeRepository(BaseRepository[Knowledge]):
         return self.save(knowledge)
 
     def archive(self, project: str, object_id: str) -> Knowledge:
-        """Архивировать знание (статус archived; явная команда)."""
+        """Архивировать знание (статус ARCHIVED; legacy API)."""
         knowledge = self.load(project, object_id)
         knowledge.status = KNOWLEDGE_STATUS_ARCHIVED
         self.update(knowledge)
