@@ -106,19 +106,19 @@ class Retriever:
             snapshot=snapshot, refine_limit=refine_limit,
         )
 
-        # 4. Knowledge eligibility for direct candidates
+        # 4. Relationship Traverser (Q4, снимок индекса; кросс-проектные
+        #    цели через snapshot_provider — DS-017 v1.2).
+        # Traversal starts from all ranked candidates: non-canonical items
+        # may carry relations that lead to canonical knowledge.  Eligibility
+        # is enforced exactly once on the full expanded set (KI-002).
         include_noncanonical = include_history or parsed.include_history
-        filtered = self._filter.filter(ranked, include_noncanonical)
-
-        # 5. Relationship Traverser (Q4, снимок индекса; кросс-проектные
-        #    цели через snapshot_provider — DS-017 v1.2)
         expanded = self._traverser.traverse(
-            filtered, project or "", snapshot,
+            ranked, project or "", snapshot,
             snapshot_provider=snapshot_provider,
         )
 
-        # Relation expansion is a candidate source, not an eligibility
-        # bypass: apply the exact same policy to every added neighbor.
+        # 5. Single eligibility pass — direct candidates and relation-added
+        #    neighbors receive the same policy; no candidate is filtered twice.
         eligible = self._filter.filter(expanded, include_noncanonical)
 
         # 6. Knowledge Selector (Top N)
