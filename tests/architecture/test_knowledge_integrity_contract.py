@@ -29,7 +29,9 @@ from hkos.mcp_server.context import build_context
 from hkos.mcp_server.tools import tool_save
 from hkos.repository.knowledge_relations import KnowledgeRelation, RelationType
 from hkos.repository.models import (
+    KNOWLEDGE_STATUS_ARCHIVED,
     KNOWLEDGE_STATUS_NEW as MODELS_STATUS_NEW,
+    VALID_KNOWLEDGE_STATUSES as MODELS_VALID_STATUSES,
     Knowledge,
 )
 from hkos.repository.repository_manager import RepositoryManager
@@ -40,6 +42,7 @@ from hkos.services.librarian import Librarian
 from hkos.services.librarian.exceptions import KnowledgeStatusError
 from hkos.services.librarian.knowledge_status import (
     KNOWLEDGE_STATUS_CANONICAL,
+    VALID_KNOWLEDGE_STATUSES as SERVICES_VALID_STATUSES,
 )
 from hkos.services.project_manager import ProjectManager
 from hkos.storage import StorageEngine
@@ -242,20 +245,34 @@ class TestObservationAndCanonicalization:
 class TestStatusVocabulary:
     """Target: one authoritative status vocabulary."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "KNOWN-DEVIATION KI-005: repository.models keeps a second, "
-            "lowercase status vocabulary (new/candidate/under_review/"
-            "validated/...) besides services.librarian.knowledge_status"
-        ),
-    )
     def test_single_status_vocabulary(self, tmp_path: Path) -> None:
-        """KI-005: the NEW status has one definition and one value."""
+        """KI-005: repository and Librarian share one vocabulary object."""
         from hkos.services.librarian.knowledge_status import (
             KNOWLEDGE_STATUS_NEW as SERVICES_STATUS_NEW,
         )
         assert MODELS_STATUS_NEW == SERVICES_STATUS_NEW == "NEW"
+        assert MODELS_VALID_STATUSES is SERVICES_VALID_STATUSES
+
+    def test_legacy_archived_is_normalized_before_filtering(
+        self, tmp_path: Path
+    ) -> None:
+        """KI-009: lowercase persisted ARCHIVED cannot leak into retrieval."""
+        fx = ContractFixture(tmp_path)
+        pid = fx.project()
+        knowledge = fx.register(pid, "legacy archived")
+        path = fx.engine.path_manager.knowledge_file(
+            fx.engine.root, pid, knowledge.id)
+        doc = fx.engine.read_json(path)
+        doc["data"]["status"] = "archived"
+        fx.engine.write_json(path, doc)
+
+        loaded = fx.repos.knowledge.load(pid, knowledge.id)
+        ranked = RankedCandidate(
+            entity=loaded, entity_type="knowledge", score=1.0,
+            factors={}, sources=[])
+
+        assert loaded.status == KNOWLEDGE_STATUS_ARCHIVED
+        assert KnowledgeFilter.filter([ranked]) == []
 
 
 class TestRepositoryBoundary:
