@@ -84,6 +84,7 @@ class TestRetrievalArchitecture:
 
     def test_5_traversal_uses_only_q4(self) -> None:
         source = inspect.getsource(RelationshipTraverser)
+        # Связи получаются ТОЛЬКО через Q4; документы для связей не читаются
         assert "entity.relations" not in source
         assert "knowledge.relations" not in source
         assert ".relations_of_knowledge" in source
@@ -102,6 +103,7 @@ class TestRetrievalArchitecture:
 
     def test_8_ranking_has_no_hardcoded_coefficients(self) -> None:
         ranking = open(os.path.join(RETRIEVAL_DIR, "ranking_engine.py"), encoding="utf-8").read()
+        # Ни одного десятичного литерала (коэффициенты только из конфигурации)
         decimals = re.findall(r"\d+\.\d+", ranking)
         assert decimals == [], f"hardcoded coefficients: {decimals}"
 
@@ -173,6 +175,7 @@ class TestRetrievalArchitecture:
         retriever = Retriever(parser, builder, ranking, filter_, traverser, selector)
         retriever.run("test", project="p1")
 
+        # Каждая стадия конвейера вызвана (порядок соответствует IP-008)
         assert parser.parse.called
         assert builder.build.called
         assert ranking.rank.called
