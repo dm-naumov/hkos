@@ -60,7 +60,7 @@ class CrossProjectFixture:
                 kind="decision",
                 relations=[KnowledgeRelation(
                     relation_type=RelationType.CAUSED_BY,
-                    source_id="",
+                    source_id="",  # Librarian проставит источник (владельца)
                     target_id=fact.id,
                     target_project_id=a_pid,
                 )]))
@@ -76,6 +76,7 @@ class TestCrossProjectTraversal:
     def test_traverser_reaches_cross_project_target(
         self, tmp_path: Path
     ) -> None:
+        """traverse с provider: цель из другого проекта загружается."""
         fx = CrossProjectFixture(tmp_path)
         a_pid, b_pid = fx.seed()
         snapshot_b = fx.qc.snapshot(b_pid)
@@ -87,9 +88,11 @@ class TestCrossProjectTraversal:
             entity=b_knowledge[0], entity_type="knowledge", score=1.0,
             factors={}, sources=["topic"],
         )
+        # без provider: кросс-цель недоступна (как раньше)
         solo = RelationshipTraverser(fx.repos).traverse(
             [seed], b_pid, snapshot_b)
         assert len(solo) == 1
+        # с provider: факт проекта A приходит как relation-кандидат
         crossed = RelationshipTraverser(fx.repos).traverse(
             [seed], b_pid, snapshot_b, snapshot_provider=fx.qc.snapshot)
         assert len(crossed) == 2, [c.entity.title for c in crossed]
@@ -101,12 +104,15 @@ class TestCrossProjectTraversal:
     def test_retrieve_includes_cross_project_related(
         self, tmp_path: Path
     ) -> None:
+        """retrieve(B) по слову факта: знание A приходит связанным."""
         fx = CrossProjectFixture(tmp_path)
         a_pid, b_pid = fx.seed()
         result = fx.retrieval.retrieve("window scaling", project_id=b_pid,
                                        top_n=5)
         titles = [item.entity.title for item in result.items]
         assert "disable tcp window scaling" in titles
+        # поиск без обхода связей факт A не возвращает (нет общего токена
+        # в B-кандидатах) — контрпример для search()
         searched = fx.retrieval.search("window scaling", project_id=b_pid,
                                        top_n=5)
         searched_titles = [item.entity.title for item in searched.items]
