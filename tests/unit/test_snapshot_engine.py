@@ -71,6 +71,7 @@ class TestSnapshotEngine:
         k = lib.register(p.id, Knowledge(
             title="UDP fix", body="udp", tags=["udp"], confirmations=8,
         ))
+        lib.verify(p.id, k.id)
         lib.canonicalize(p.id, k.id)
         lib.register(p.id, Knowledge(title="Fail", body="f", kind="negative", tags=["f"]))
         index.build(p.id)
@@ -96,6 +97,7 @@ class TestSnapshotEngine:
         project = self._corpus(repos, lib, index)
         first = snap.create(project, reason="initial")
         k = lib.register(project, Knowledge(title="New canonical", body="n", tags=["n"]))
+        lib.verify(project, k.id)
         lib.canonicalize(project, k.id)
         index.update(project, k.id, "knowledge")
         second = snap.update(project, reason="new_knowledge")
@@ -152,7 +154,6 @@ class TestSnapshotEngine:
         snap.create(project)
         first = snap.load(project)
         assert first is not None
-        # документ не мутируется после создания
         before = snap.serialize(first)
         after = snap.serialize(first)
         assert before == after
