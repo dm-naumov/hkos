@@ -40,6 +40,7 @@ class TestFullAcceptance:
         knowledge = ctx.librarian.register(project.id, Knowledge(
             title="FullFact udp", body="udp", tags=["udp"],
             source_campaign=c1.id))
+        ctx.librarian.verify(project.id, knowledge.id)
         ctx.librarian.canonicalize(project.id, knowledge.id)
         # Index -> Snapshot
         ctx.index.build(project.id)
@@ -49,6 +50,7 @@ class TestFullAcceptance:
         assert len(result.items) >= 1
         saved = ctx.librarian.register(project.id, Knowledge(
             title="SavedFact udp", body="llm output", tags=["udp"]))
+        ctx.librarian.verify(project.id, saved.id)
         ctx.librarian.canonicalize(project.id, saved.id)
         # Index Update -> Snapshot Update
         ctx.index.update(project.id, saved.id, "knowledge")
