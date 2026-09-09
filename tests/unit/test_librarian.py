@@ -43,7 +43,7 @@ class TestLibrarian:
         k = lib.register("p1", Knowledge(title="TProxy UDP works", body="..."))
         assert k.status == KNOWLEDGE_STATUS_NEW
         assert k.id
-        assert k.category
+        assert k.category  # классифицировано
         assert k.confidence == 50
         assert [e.event for e in k.history] == ["Created"]
 
@@ -72,7 +72,7 @@ class TestLibrarian:
         updated = lib.update("p1", k2)
         assert updated.body == "v2"
         assert updated.id == k.id
-        assert updated.confidence == 70
+        assert updated.confidence == 70  # 50 + 4*5
         assert updated.history[-1].event == "Updated"
 
     def test_update_missing_raises(self, tmp_path: Path) -> None:
@@ -110,7 +110,7 @@ class TestLibrarian:
         lib.verify("p1", k.id)
         lib.canonicalize("p1", k.id)
         k2 = lib._load("p1", k.id)
-        k2.category = "RULE"
+        k2.category = "RULE"  # попытка смены
         updated = lib.update("p1", k2)
         assert updated.category == "FACT"
 
@@ -122,6 +122,7 @@ class TestLibrarian:
         assert merged.status == KNOWLEDGE_STATUS_CANONICAL
         assert merged.parent_ids == [a.id, b.id]
         assert merged.confidence > 0
+        # Исходники не изменены
         assert lib._load("p1", a.id).status == KNOWLEDGE_STATUS_NEW
 
     def test_merge_missing_raises(self, tmp_path: Path) -> None:
@@ -158,7 +159,8 @@ class TestLibrarian:
         k = lib.register("p1", Knowledge(title="X"))
         k2 = lib._load("p1", k.id)
         k2.confirmations = 5
-        lib.update("p1", k2)
+        lib.update("p1", k2)  # confidence = 75
+        # Имитация легаси-данных: устаревшее значение confidence на диске
         stale = lib._load("p1", k.id)
         stale.confidence = 10
         RepositoryManager(engine).knowledge.update(stale)
@@ -195,6 +197,7 @@ class TestLibrarian:
         assert k.status == KNOWLEDGE_STATUS_NEW
 
     def test_explain_category_matches_register(self, tmp_path: Path) -> None:
+        """DS-017 §4.3.1: explain_category == решению register (категория+rule)."""
         lib, _ = self._librarian(tmp_path)
         knowledge = Knowledge(title="Решение: использовать TProxy", kind="fact")
         category, rule = lib.explain_category(knowledge)
@@ -205,15 +208,20 @@ class TestLibrarian:
 
     def test_explain_category_negative_kind(self, tmp_path: Path) -> None:
         lib, _ = self._librarian(tmp_path)
-        category, rule = lib.explain_category(Knowledge(title="X", kind="negative"))
+        category, rule = lib.explain_category(
+            Knowledge(title="X", kind="negative")
+        )
         assert category == "FAILURE"
         assert rule == "rule:kind:negative"
 
     def test_exactly_fourteen_public_methods(self, tmp_path: Path) -> None:
+        """Ровно 14 публичных методов (DS-017 ЭТАП 2/4: validate_relations,
+        explain_category)."""
         lib, _ = self._librarian(tmp_path)
         api = {name for name in dir(lib) if not name.startswith("_")}
         assert api == {
             "register", "update", "verify", "canonicalize", "merge", "archive",
-            "restore", "reject", "detect_conflicts", "recalculate_confidence",
-            "history", "validate", "validate_relations", "explain_category",
+            "restore", "reject", "detect_conflicts",
+            "recalculate_confidence", "history", "validate",
+            "validate_relations", "explain_category",
         }
