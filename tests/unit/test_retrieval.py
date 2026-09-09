@@ -116,6 +116,7 @@ class TestRetrievalEngine:
 
     def test_scope_error_without_project(self, tmp_path: Path) -> None:
         engine, repos, lib, rv = self._ctx(tmp_path)
+        # без registry и без project_id -> RetrievalScopeError
         unscoped = RetrievalEngine(
             repos, IndexQueryExecutor(IndexStore(engine)), ConfigLoader(profile="development"),
             HKOSLogger(), project_registry={},
