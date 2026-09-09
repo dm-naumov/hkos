@@ -176,12 +176,6 @@ class TestGraphEligibility:
 class TestObservationAndCanonicalization:
     """Target: observation is not canonical; verify is separate."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "KNOWN-DEVIATION KI-003: MCP save defaults to canonicalize=true"
-        ),
-    )
     def test_save_without_elevated_action_not_canonical(
         self, tmp_path: Path
     ) -> None:
