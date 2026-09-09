@@ -76,9 +76,10 @@ class TestContextIntegration:
         lib = Librarian(repos, HKOSLogger())
         index = IndexEngine(repos, IndexStore(engine), HKOSLogger())
         p = repos.projects.save(Project(name="Phoenix Contact", tags=["terminal"]))
-        lib.register(p.id, Knowledge(
+        knowledge = lib.register(p.id, Knowledge(
             title="Terminal blocks", body="phoenix", tags=["terminal"],
         ))
+        lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         snapshot = SnapshotDocument(
             snapshot_id="snapshot-00041", timestamp="2026-07-26T21:43:00Z",
@@ -101,10 +102,11 @@ class TestContextIntegration:
         engine, repos, lib, index, rv, cb = self._ctx(tmp_path)
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
         for i in range(30):
-            lib.register(p.id, Knowledge(
+            knowledge = lib.register(p.id, Knowledge(
                 title=f"UDP knowledge {i}", body=f"udp topic {i}",
                 tags=["udp"], confirmations=i,
             ))
+            lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         result = rv.retrieve("udp", project_id=p.id, top_n=30)
         context_small = cb.build(result, p.id, profile="SMALL")
@@ -116,7 +118,9 @@ class TestContextIntegration:
         """Repeated Knowledge: дубликаты удаляются."""
         engine, repos, lib, index, rv, cb = self._ctx(tmp_path)
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
-        lib.register(p.id, Knowledge(title="UDP best", body="udp", tags=["udp"]))
+        knowledge = lib.register(
+            p.id, Knowledge(title="UDP best", body="udp", tags=["udp"]))
+        lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         result = rv.retrieve("udp", project_id=p.id, top_n=10)
         # Дублируем элемент вручную (имитация повторного попадания)
@@ -132,7 +136,7 @@ class TestContextIntegration:
         for i in range(10000):
             repos.knowledge.save(Knowledge(
                 project=p.id, title=f"Knowledge {i}", body=f"body {i} udp",
-                tags=["bulk"] if i % 2 else ["udp"]))
+                tags=["bulk"] if i % 2 else ["udp"], status="CANONICAL"))
         index.build(p.id)
         result = rv.retrieve("udp", project_id=p.id, top_n=50)
         start = time.monotonic()

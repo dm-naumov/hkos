@@ -97,7 +97,9 @@ class TestRetrievalIntegration:
         lib = Librarian(repos, HKOSLogger())
         index = IndexEngine(repos, IndexStore(engine), HKOSLogger())
         p = repos.projects.save(Project(name="OpenWrt", tags=["router"]))
-        lib.register(p.id, Knowledge(title="TProxy UDP", body="udp", tags=["udp"]))
+        knowledge = lib.register(
+            p.id, Knowledge(title="TProxy UDP", body="udp", tags=["udp"]))
+        lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         rv = RetrievalEngine(
             repos, IndexQueryExecutor(IndexStore(engine)), cfg, HKOSLogger(),
@@ -110,9 +112,10 @@ class TestRetrievalIntegration:
     def test_scenario_phoenix_contact(self, tmp_path: Path) -> None:
         engine, repos, lib, index, rv = self._ctx(tmp_path)
         p = repos.projects.save(Project(name="Phoenix Contact", tags=["terminal"]))
-        lib.register(p.id, Knowledge(
+        knowledge = lib.register(p.id, Knowledge(
             title="Phoenix terminal blocks", body="industrial automation",
             tags=["terminal"], confirmations=3))
+        lib.canonicalize(p.id, knowledge.id)
         index.build(p.id)
         result = rv.search("аналог Phoenix Contact", project_id=p.id)
         assert result.items
@@ -123,6 +126,7 @@ class TestRetrievalIntegration:
         k = lib.register(p.id, Knowledge(
             title="Campaign result", body="tproxy udp", tags=["udp"],
             source_campaign="camp-17", confirmations=2))
+        lib.canonicalize(p.id, k.id)
         lib.register(p.id, Knowledge(
             title="Other", body="udp", tags=["udp"], confirmations=1))
         index.build(p.id)
@@ -181,7 +185,8 @@ class TestRetrievalIntegration:
         for i in range(10000):
             repos.knowledge.save(Knowledge(
                 project=p.id, title=f"Knowledge {i}",
-                body=f"body {i} udp", tags=["bulk"] if i % 2 else ["udp"]))
+                body=f"body {i} udp", tags=["bulk"] if i % 2 else ["udp"],
+                status="CANONICAL"))
         index.build(p.id)
         start = time.monotonic()
         result = rv.retrieve("udp", project_id=p.id, top_n=20)

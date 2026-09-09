@@ -52,7 +52,6 @@ class SqliteContext:
             self.repos, self.json_store, HKOSLogger(), cache=cache)
 
     def build_corpus(self) -> str:
-        """Корпус с тегами/negative/merge-relations; JSON-индексы построены."""
         project = self.projects.create(name="P1", tags=["demo"])
         pid = project.id
         a = self.librarian.register(
@@ -73,15 +72,12 @@ class SqliteContext:
         return pid
 
     def json_data(self, pid: str, name: str) -> dict[str, object] | None:
-        """data индекс-дока из JSON-бэкенда."""
         return self.json_store.read(pid, name)
 
     def sqlite_data(self, pid: str, name: str) -> dict[str, object] | None:
-        """data индекс-дока из sqlite-бэкенда (mirror записан ранее)."""
         return self.sqlite_store.read(pid, name)
 
     def mirror(self, pid: str, name: str, data: dict[str, object]) -> None:
-        """Записать data в sqlite-бэкенд (конверт как _index_doc)."""
         self.sqlite_store.write(pid, name, {
             "schema": "HKOS-1.0", "type": "index", "version": 1,
             "data": data,
@@ -89,13 +85,10 @@ class SqliteContext:
 
 
 class TestSqliteIndexStore:
-    """Контракт IndexStore поверх SQLite + parity с JSON."""
-
     def _ctx(self, tmp_path: Path) -> SqliteContext:
         return SqliteContext(tmp_path)
 
     def test_parity_all_five_index_docs(self, tmp_path: Path) -> None:
-        """Каждый из 5 доков: sqlite.read == json.read (значение)."""
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
@@ -108,7 +101,6 @@ class TestSqliteIndexStore:
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
         ctx.mirror(pid, "keyword", ctx.json_data(pid, "keyword") or {})
-        # Имитация дельты: запись keyword-дока БЕЗ одного слова/сущности
         reduced_data = ctx.json_data(pid, "keyword")
         assert reduced_data is not None
         reduced = dict(reduced_data)
@@ -132,12 +124,10 @@ class TestSqliteIndexStore:
     def test_missing_and_delete_semantics(self, tmp_path: Path) -> None:
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
-        # Несуществующий проект/док -> None
         assert ctx.sqlite_data("no-such-project", "keyword") is None
         empty = self._ctx(tmp_path / "other").projects.create(
             name="E", tags=[]).id
         assert ctx.sqlite_store.list_names(empty) == []
-        # delete(name): док исчезает, остальные живы
         ctx.mirror(pid, "statistics", ctx.json_data(pid, "statistics") or {})
         assert ctx.sqlite_store.exists(pid, "statistics")
         ctx.sqlite_store.delete(pid, "statistics")
@@ -166,7 +156,6 @@ class TestSqliteIndexStore:
                 "entity_words": {"x": ["w1"]}}
         ctx.mirror(pid1, "keyword", data)
         assert ctx.sqlite_data(pid2, "keyword") is None
-        # физически разные файлы
         db1 = Path(ctx.engine.root) / "projects" / pid1 / "indexes" / INDEX_STORE_DB
         db2 = Path(ctx.engine.root) / "projects" / pid2 / "indexes" / INDEX_STORE_DB
         assert db1.exists() and not db2.exists()
@@ -176,7 +165,6 @@ class TestSqliteIndexStore:
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
             ctx.mirror(pid, name, ctx.json_data(pid, name) or {})
-        # новое соединение (новый экземпляр store)
         reopened = SqliteIndexStore(ctx.engine)
         for name in _INDEX_NAMES:
             assert reopened.read(pid, name) == ctx.json_data(pid, name), name
@@ -184,7 +172,6 @@ class TestSqliteIndexStore:
     def test_fingerprint_stable_then_changes(self, tmp_path: Path) -> None:
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
-        # До первой записи в sqlite файла БД нет -> (-1, -1)
         fp_missing = ctx.sqlite_store.fingerprint(pid)
         assert fp_missing == ((INDEX_STORE_DB, -1, -1),)
         ctx.mirror(pid, "entities", ctx.json_data(pid, "entities") or {})
@@ -198,7 +185,6 @@ class TestSqliteIndexStore:
         assert missing == ((INDEX_STORE_DB, -1, -1),)
 
     def test_stable_roundtrip(self, tmp_path: Path) -> None:
-        """write→read→write даёт стабильные данные (идемпотентность)."""
         ctx = self._ctx(tmp_path)
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
@@ -207,18 +193,11 @@ class TestSqliteIndexStore:
             ctx.mirror(pid, name, data)
             first = ctx.sqlite_data(pid, name)
             assert first is not None
-            ctx.mirror(pid, name, first)  # read→write повторно
+            ctx.mirror(pid, name, first)
             assert ctx.sqlite_data(pid, name) == first
 
 
 class TestSqliteDeltaUpdate:
-    """IP-017-v1.2 ЭТАП 1b: дельта update_entity/remove_entity.
-
-    Пошаговые операции (добавление/модификация/удаление) выполняются на
-    JSON-пути (IndexEngine.update/remove — эталон) и на sqlite
-    (update_entity/remove_entity); после КАЖДОГО шага все 5 доков равны.
-    """
-
     def test_incremental_ops_match_json(self, tmp_path: Path) -> None:
         ctx = SqliteContext(tmp_path)
         pid = ctx.projects.create(name="Delta", tags=["t"]).id
@@ -232,12 +211,10 @@ class TestSqliteDeltaUpdate:
                 pid, ctx.repos.knowledge.load(pid, k.id), "knowledge")
             return k.id
 
-        # 1) добавление: факт + negative (слова/теги пересекаются)
         a = register("udp tproxy fix", "routing table fwmark", ["udp", "t"])
         register("udp breakage mtu", "mtu 1400 kills udp", ["udp", "mtu"],
                  kind="negative")
         _assert_all_equal(ctx, pid)
-        # 2) модификация существующей сущности (слова изменились)
         changed = ctx.repos.knowledge.load(pid, a)
         changed.body = "completely different body dns"
         changed.tags = ["dns"]
@@ -246,7 +223,6 @@ class TestSqliteDeltaUpdate:
         ctx.index.update(pid, a, "knowledge")
         ctx.sqlite_store.update_entity(pid, fresh, "knowledge")
         _assert_all_equal(ctx, pid)
-        # 3) удаление из индексов (репозиторий не трогаем — как JSON remove)
         ctx.index.remove(pid, a, "knowledge")
         ctx.sqlite_store.remove_entity(pid, a, "knowledge")
         _assert_all_equal(ctx, pid)
@@ -266,9 +242,7 @@ class TestSqliteDeltaUpdate:
         stats_statistics = stats["statistics"]
         assert isinstance(stats_statistics, dict)
         counts = stats_statistics
-        # все 3 сущности — knowledge (negative kind не меняет тип сущности)
         assert counts["knowledge"] == 3 and counts["decisions"] == 0
-        # удаление: счётчик уменьшается
         ctx.sqlite_store.remove_entity(pid, k3.id, "knowledge")
         stats2 = ctx.sqlite_data(pid, "statistics")
         assert stats2 is not None
@@ -278,7 +252,6 @@ class TestSqliteDeltaUpdate:
 
 
 def _assert_all_equal(ctx: SqliteContext, pid: str) -> None:
-    """Все 5 доков sqlite == json (после операции)."""
     for name in _INDEX_NAMES:
         json_data = ctx.json_data(pid, name)
         assert json_data is not None, name
@@ -286,14 +259,7 @@ def _assert_all_equal(ctx: SqliteContext, pid: str) -> None:
 
 
 class TestSqliteQueryLayer:
-    """ЭТАП 2: Q1-Q5 исполняются SQL (снапшот-паритет) + горячий путь.
-
-    SqliteIndexSnapshot повторяет контракт IndexSnapshot; RetrievalEngine
-    через IndexQueryExecutor не знает, какой бэкенд под ним.
-    """
-
     def test_query_snapshot_matches_json(self, tmp_path: Path) -> None:
-        """Q1-Q5 sqlite == JSON на одном корпусе (снапшот-паритет)."""
         ctx = SqliteContext(tmp_path)
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
@@ -302,20 +268,14 @@ class TestSqliteQueryLayer:
         sqlite_qc = IndexQueryExecutor(ctx.sqlite_store)
         js = json_qc.snapshot(pid)
         ss = sqlite_qc.snapshot(pid)
-
-        # Q1: keyword_search
         assert ss.keyword_search("udp") == js.keyword_search("udp")
         assert ss.keyword_search("mtu") == js.keyword_search("mtu")
         assert ss.keyword_search("absent-word") == []
-        # Q2: tag_search
         assert ss.tag_search("tproxy") == js.tag_search("tproxy")
-        # Q3: entity_get
         for eid in js.ids():
             assert ss.entity_get(eid) == js.entity_get(eid)
         assert ss.entity_get("no-such-id") is None
-        # Q4: relations (merge создал рёбра). Порядок при РАВНЫХ created_at —
-        # в JSON артефакт истории построения out (не контракт); детерминизм
-        # контракта — сортировка по created_at. Сравниваем канонически.
+
         def canon(rels: list[Any]) -> list[dict[str, str]]:
             return sorted(
                 (r.to_dict() for r in rels),
@@ -329,14 +289,12 @@ class TestSqliteQueryLayer:
         assert canon(ss.relations_of_project()) == canon(
             js.relations_of_project()
         )
-        # Q5: statistics + ids
         assert ss.statistics() == js.statistics()
         assert ss.ids() == js.ids()
 
     def test_hot_path_sqlite_backend_retrieval(
         self, tmp_path: Path
     ) -> None:
-        """Горячий путь на sqlite: register -> delta update -> retrieve."""
         cfg = ConfigLoader(profile="development")
         cfg.load()
         engine = StorageEngine(
@@ -363,6 +321,7 @@ class TestSqliteQueryLayer:
         ]:
             k = librarian.register(
                 pid, Knowledge(title=title, body=body, tags=tags))
+            librarian.canonicalize(pid, k.id)
             index.update(pid, k.id, "knowledge")
             titles.append(title)
 
@@ -375,7 +334,6 @@ class TestSqliteQueryLayer:
         assert snap.statistics()["knowledge"] == len(titles)
 
     def test_hot_path_update_is_delta(self, tmp_path: Path) -> None:
-        """update через IndexEngine (sqlite) не переписывает корпус."""
         ctx = SqliteContext(tmp_path)
         pid = ctx.build_corpus()
         for name in _INDEX_NAMES:
@@ -398,10 +356,8 @@ class TestSqliteQueryLayer:
         postings_after = kw_after["postings"]
         assert isinstance(postings_after, dict)
         rows_after = sum(len(v) for v in postings_after.values())
-        # дельта: добавились только слова новой сущности (не перезапись)
         assert rows_after > rows_before
         assert len(postings_after) - len(postings_before) < 10
-        # удаление дельтой
         sqlite_index.remove(pid, k.id, "knowledge")
         kw_final = ctx.sqlite_store.read(pid, "keyword")
         assert kw_final is not None

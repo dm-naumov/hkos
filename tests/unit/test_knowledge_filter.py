@@ -1,47 +1,51 @@
-"""Unit tests for KnowledgeFilter (DS-008 §11)."""
+"""Unit tests for the Knowledge eligibility policy."""
 
 from hkos.repository.models import Knowledge
 from hkos.retrieval.knowledge_filter import KnowledgeFilter
 from hkos.retrieval.ranking_engine import RankedCandidate
 
 
-def _candidate(kid: str, status: str) -> RankedCandidate:
+def _candidate(kid: str, status: str, entity_type: str = "knowledge") -> RankedCandidate:
     return RankedCandidate(
         entity=Knowledge(id=kid, status=status, confidence=50),
-        entity_type="knowledge",
+        entity_type=entity_type,
         score=50.0,
         factors={"confidence": 0.5},
     )
 
 
 class TestKnowledgeFilter:
-    """По умолчанию исключаются ARCHIVED/REJECTED/SUPERSEDED."""
+    """Ordinary policy is a positive CANONICAL allowlist."""
 
-    def test_excludes_archived(self) -> None:
-        ranked = [_candidate("k1", "NEW"), _candidate("k2", "ARCHIVED")]
+    def test_default_keeps_only_canonical_knowledge(self) -> None:
+        ranked = [
+            _candidate("new", "NEW"),
+            _candidate("verified", "VERIFIED"),
+            _candidate("canonical", "CANONICAL"),
+            _candidate("conflict", "CONFLICT"),
+            _candidate("rejected", "REJECTED"),
+            _candidate("superseded", "SUPERSEDED"),
+            _candidate("archived", "ARCHIVED"),
+        ]
         result = KnowledgeFilter.filter(ranked)
-        assert [c.entity.id for c in result] == ["k1"]
+        assert [candidate.entity.id for candidate in result] == ["canonical"]
 
-    def test_excludes_rejected(self) -> None:
-        ranked = [_candidate("k1", "REJECTED")]
-        assert KnowledgeFilter.filter(ranked) == []
+    def test_include_history_is_explicit_all_status_policy(self) -> None:
+        ranked = [
+            _candidate("new", "NEW"),
+            _candidate("archived", "ARCHIVED"),
+        ]
+        assert KnowledgeFilter.filter(ranked, include_history=True) == ranked
 
-    def test_excludes_superseded(self) -> None:
-        ranked = [_candidate("k1", "SUPERSEDED")]
-        assert KnowledgeFilter.filter(ranked) == []
-
-    def test_include_history_keeps_all(self) -> None:
-        ranked = [_candidate("k1", "ARCHIVED"), _candidate("k2", "REJECTED")]
-        result = KnowledgeFilter.filter(ranked, include_history=True)
-        assert len(result) == 2
-
-    def test_keeps_valid_statuses(self) -> None:
-        ranked = [_candidate("k1", "NEW"), _candidate("k2", "VERIFIED"),
-                  _candidate("k3", "CANONICAL"), _candidate("k4", "CONFLICT")]
-        assert len(KnowledgeFilter.filter(ranked)) == 4
+    def test_non_knowledge_entity_is_not_subject_to_lifecycle_policy(self) -> None:
+        decision = _candidate("d1", "ACCEPTED", entity_type="decision")
+        assert KnowledgeFilter.filter([decision]) == [decision]
 
     def test_order_preserved(self) -> None:
-        ranked = [_candidate("k1", "NEW"), _candidate("k2", "ARCHIVED"),
-                  _candidate("k3", "VERIFIED")]
+        ranked = [
+            _candidate("k1", "CANONICAL"),
+            _candidate("k2", "NEW"),
+            _candidate("k3", "CANONICAL"),
+        ]
         result = KnowledgeFilter.filter(ranked)
-        assert [c.entity.id for c in result] == ["k1", "k3"]
+        assert [candidate.entity.id for candidate in result] == ["k1", "k3"]

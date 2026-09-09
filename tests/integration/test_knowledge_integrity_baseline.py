@@ -193,7 +193,7 @@ class TestRegisterAndCanonicalize:
 
 
 class TestKnowledgeFilterCurrent:
-    """Default KnowledgeFilter membership (v1.2.0 characterization)."""
+    """Default KnowledgeFilter membership after KI-001 remediation."""
 
     @staticmethod
     def _candidate(status: str, title: str) -> RankedCandidate:
@@ -202,19 +202,17 @@ class TestKnowledgeFilterCurrent:
             entity_type="knowledge", score=1.0, factors={}, sources=[],
         )
 
-    def test_filter_keeps_new_verified_canonical_conflict(
+    def test_filter_keeps_only_canonical_by_default(
         self, tmp_path: Path
     ) -> None:
-        """v1.2.0: default filter keeps NEW/VERIFIED/CANONICAL/CONFLICT."""
+        """KI-001: ordinary retrieval admits CANONICAL only."""
         kept = KnowledgeFilter.filter([
             self._candidate("NEW", "n"),
             self._candidate("VERIFIED", "v"),
             self._candidate("CANONICAL", "c"),
             self._candidate("CONFLICT", "x"),
         ])
-        assert [k.entity.status for k in kept] == [
-            "NEW", "VERIFIED", "CANONICAL", "CONFLICT",
-        ]
+        assert [k.entity.status for k in kept] == ["CANONICAL"]
 
     def test_filter_excludes_archived_rejected_superseded(
         self, tmp_path: Path
@@ -312,37 +310,29 @@ class TestGraphTraversalCurrent:
         fx.canonicalize(pid, a.id)
         return a.id, b.id
 
-    def test_traversal_adds_neighbor_that_failed_pre_filter(
+    def test_traversal_cannot_restore_ineligible_neighbor(
         self, tmp_path: Path
     ) -> None:
-        """v1.2.0: graph expansion adds an ARCHIVED neighbor to results.
-
-        The neighbor (status ARCHIVED) would have been dropped by the
-        default pre-traversal KnowledgeFilter; after traversal it appears
-        in the retrieved items. Deviation KI-002 in ADR-001.
-        """
+        """KI-002: graph expansion cannot restore an ARCHIVED neighbor."""
         fx = KnowledgeIntegrityFixture(tmp_path)
         pid = fx.projects.create(name="P", tags=["t"]).id
         a_id, b_id = self._seed_anchor_and_archived_neighbor(fx, pid)
 
         result = fx.retrieval.retrieve("alpha", project_id=pid, top_n=10)
         titles = fx.titles_of(result.items)
-        assert any(t == "archived graph neighbor" for t in titles), titles
-        assert any(t == "alpha anchor anchorfact" for t in titles), titles
+        assert "archived graph neighbor" not in titles
+        assert "alpha anchor anchorfact" in titles
 
-    def test_archived_neighbor_keeps_its_status_in_result(
+    def test_include_history_applies_to_relation_neighbor(
         self, tmp_path: Path
     ) -> None:
-        """v1.2.0: traversed ARCHIVED neighbor is NOT re-filtered/repriced.
-
-        It arrives with status ARCHIVED preserved and a relation source —
-        no second eligibility pass happens after graph expansion.
-        """
+        """Explicit history policy admits an ARCHIVED relation neighbor."""
         fx = KnowledgeIntegrityFixture(tmp_path)
         pid = fx.projects.create(name="P", tags=["t"]).id
         a_id, b_id = self._seed_anchor_and_archived_neighbor(fx, pid)
 
-        result = fx.retrieval.retrieve("alpha", project_id=pid, top_n=10)
+        result = fx.retrieval.retrieve(
+            "alpha", project_id=pid, top_n=10, include_history=True)
         neighbor = next(
             (item for item in result.items
              if item.entity.title == "archived graph neighbor"), None)

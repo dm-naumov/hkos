@@ -43,7 +43,8 @@ class _Harness:
         for i in range(n):
             self.repos.knowledge.save(Knowledge(
                 project=p.id, title=f"K{i} udp fix", body=f"body {i} udp",
-                tags=["udp"] if i % 2 == 0 else ["net"]))
+                tags=["udp"] if i % 2 == 0 else ["net"],
+                status="CANONICAL"))
         self.index.build(p.id)
         return p.id
 
