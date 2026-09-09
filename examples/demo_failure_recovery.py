@@ -4,6 +4,12 @@
 память и получает в выдаче запись FAILURE (negative knowledge — first-class
 результат) и связанное решение, избегая повтора. Zero LLM: никаких моделей —
 детерминированная retrieve-выборка по индексу.
+
+Usage (from the repository root):
+    python examples/demo_failure_recovery.py
+
+Всё живёт во временном data root; реальные данные не трогаются.
+Exit: 0 — демо прошло (FAILURE найден первым).
 """
 
 from __future__ import annotations
@@ -29,31 +35,77 @@ from hkos.storage import StorageEngine
 def main() -> int:
     root = Path(tempfile.mkdtemp(prefix="hkos-demo-failure-"))
     print(f"data root: {root}")
-    cfg = ConfigLoader(); cfg.load()
-    engine = StorageEngine(root=str(root), config=cfg, logger=HKOSLogger(), version=VersionManager())
+
+    cfg = ConfigLoader()
+    cfg.load()
+    engine = StorageEngine(
+        root=str(root), config=cfg, logger=HKOSLogger(),
+        version=VersionManager())
     engine.initialize()
     repos = RepositoryManager(engine)
     projects = ProjectManager(repos, HKOSLogger())
     librarian = Librarian(repos, HKOSLogger())
-    project = projects.create(name="TunnelOps", description="failure-recovery demo", tags=["demo"])
+
+    project = projects.create(
+        name="TunnelOps", description="failure-recovery demo", tags=["demo"])
+    print(f"project: {project.id}")
+
+    # 1) Память: прошлый СБОЙ + принятое РЕШЕНИЕ (+ отвлекающий факт).
     memory = [
-        Knowledge(title="mtu tunnel: UDP breaks above 1400 bytes", body="observed: UDP over tunnel dies when MTU > 1400; tcp survived, udp did not", kind="negative", tags=["mtu", "tunnel", "udp"]),
-        Knowledge(title="Decision: clamp MSS to 1360 for tunnel UDP", body="set tcp mss 1360 on the tunnel; keeps UDP under the limit", tags=["mtu", "tunnel", "udp"]),
-        Knowledge(title="mtu 1400 works over plain tcp", body="no tunnel involved; mtu 1400 fine on the lan", tags=["mtu", "tcp"]),
+        Knowledge(  # FAILURE: kind=negative -> категория FAILURE
+            title="mtu tunnel: UDP breaks above 1400 bytes",
+            body="observed: UDP over tunnel dies when MTU > 1400; "
+                 "tcp survived, udp did not",
+            kind="negative",
+            tags=["mtu", "tunnel", "udp"],
+        ),
+        Knowledge(  # DECISION: маркер 'decision' в title
+            title="Decision: clamp MSS to 1360 for tunnel UDP",
+            body="set tcp mss 1360 on the tunnel; keeps UDP under the limit",
+            tags=["mtu", "tunnel", "udp"],
+        ),
+        Knowledge(  # FACT-путаница: тот же токен, не решение проблемы
+            title="mtu 1400 works over plain tcp",
+            body="no tunnel involved; mtu 1400 fine on the lan",
+            tags=["mtu", "tcp"],
+        ),
     ]
     ids = [librarian.register(project.id, k).id for k in memory]
     for k_id in ids:
         librarian.verify(project.id, k_id)
         librarian.canonicalize(project.id, k_id)
-    store = IndexStore(engine); cache = IndexCache()
-    index = IndexEngine(repos, store, HKOSLogger(), cache=cache); index.build(project.id)
-    retrieval = RetrievalEngine(repos, IndexQueryExecutor(store, cache=cache), cfg, HKOSLogger())
+    print(f"memory: {len(ids)} items saved (FAILURE + DECISION + FACT)")
+
+    # 2) Индекс и retrieval.
+    store = IndexStore(engine)
+    cache = IndexCache()
+    index = IndexEngine(repos, store, HKOSLogger(), cache=cache)
+    index.build(project.id)
+    qc = IndexQueryExecutor(store, cache=cache)
+    retrieval = RetrievalEngine(repos, qc, cfg, HKOSLogger())
+
+    # 3) Агент A (без HKOS): повторяет прежний ошибочный подход.
+    print("\n--- agent A: no memory ---")
+    print("A: 'I will set MTU 1400 on the tunnel again.'")
+    print("A: '...UDP is dead again. Same failure as last week.'")
+
+    # 4) Агент B (с HKOS): retrieve перед действием.
+    print("\n--- agent B: consults HKOS ---")
     result = retrieval.retrieve("mtu tunnel", project_id=project.id, top_n=5)
-    assert result.items
+    print(f"B: retrieve('mtu tunnel') -> {len(result.items)} item(s):")
+    for item in result.items:
+        print(f"   [{item.entity.category}] {item.entity.title}")
+    assert result.items, "retrieval returned nothing"
     first = result.items[0].entity
-    assert first.category == "FAILURE"
+    assert first.category == "FAILURE", (
+        f"expected FAILURE first (Failure Priority factor), got "
+        f"{first.category}")
     assert "Failure Priority" in result.items[0].explanation.reason
-    print("OK: deterministic memory beats repetition (no LLM involved)")
+    print(f"B: top hit is the FAILURE record ({first.title}) — do not repeat.")
+    print("B: applying the recorded decision: clamp MSS to 1360.")
+    print("B: UDP survives. Outcome recorded.")
+
+    print("\nOK: deterministic memory beats repetition (no LLM involved)")
     return 0
 
 
